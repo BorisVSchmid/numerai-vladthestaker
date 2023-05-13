@@ -1,4 +1,4 @@
-# vladthestaker_public
+# vladthestaker
 
 ## Overview
 
