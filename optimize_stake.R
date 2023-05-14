@@ -10,14 +10,14 @@
 rm(list=ls())
 #
 # These packages are needed for sanity and reproducibility
-library(conflicted)
+# install.packages("groundhog") # version 3.1.0
 library(groundhog)
 #
 # Now load your packages and pin the date. See https://groundhogr.com
-pkgs <- c("dplyr","tidyr","knitr","readxl","tibble","stringr",
+pkgs <- c("conflicted","dplyr","tidyr","knitr","readxl","tibble","stringr",
           "memoise","Rnumerai","fPortfolio",
           "ggplot2","ggrepel")
-groundhog.library(pkgs, "2023-03-28")
+groundhog.library(pkgs, "2023-04-21")
 #
 # For a first time, you might have to restart and re-run the above code a few times. Follow the instructions.
 #
@@ -43,6 +43,7 @@ NMR <- 1000 # Amount of NMR you want to stake in total.
 input_name <- "Optimize-Me"
 model_df <- read_excel(paste0(input_name,".xlsx"))
 daily_data <- build_RAW(model_df)
+
 #
 # To have more flexibility in creating good portfolios, each model is considered as an
 # independent _corr model and _tc model
@@ -123,3 +124,29 @@ portfolio$tc_weight <- round(portfolio$tc_weight,3)
 
 kable(portfolio,caption = "Suggested portfolio. For models with both a _corr and a _tc component, either set up two model slots, or find a multiplier that works for both stakes")
 kable(singular,caption = "Expected returns based on separated weights")
+
+# 
+# Table: Suggested portfolio. For models with both a _corr and a _tc component, either set up two model slots, or find a multiplier that works for both stakes
+# 
+#   |name                | corr_weight| tc_weight| corr_0.5x| corr_1x| tc_0.5x| tc_1x| tc_1.5x| tc_2x| tc_2.5x| tc_3x|
+#   |:-------------------|-----------:|---------:|---------:|-------:|-------:|-----:|-------:|-----:|-------:|-----:|
+#   |INTEGRATION_TEST    |       0.160|     0.170|       320|     160|     340|   170|     110|    90|      70|    60|
+#   |LG_LGBM_V4_JEROME20 |       0.026|     0.128|        50|      30|     260|   130|      90|    60|      50|    40|
+#   |LG_LGBM_V4_RALPH20  |       0.097|     0.000|       190|     100|       0|     0|       0|     0|       0|     0|
+#   |LG_LGBM_V4_TYLER20  |       0.000|     0.342|         0|       0|     680|   340|     230|   170|     140|   110|
+#   |LG_LGBM_V4_WALDO20  |       0.069|     0.006|       140|      70|      10|    10|       0|     0|       0|     0|
+#   > kable(singular,caption = "Expected returns based on separated weights")
+# 
+# 
+# Table: Expected returns based on separated weights
+# 
+#   |                       |   mean|    Cov|   CVaR|    VaR| samplesize|
+#   |:----------------------|------:|------:|------:|------:|----------:|
+#   |portfolio              | 0.0094| 0.0238| 0.0375| 0.0313|        140|
+#   |portfolio1_tangency    | 0.0102| 0.0252| 0.0387| 0.0307|        140|
+#   |portfolio2_minvariance | 0.0085| 0.0235| 0.0367| 0.0313|        140|
+#   |INTEGRATION_TEST       | 0.0032| 0.0078| 0.0147| 0.0108|        140|
+#   |LG_LGBM_V4_JEROME20    | 0.0013| 0.0042| 0.0068| 0.0061|        140|
+#   |LG_LGBM_V4_RALPH20     | 0.0006| 0.0025| 0.0041| 0.0039|        140|
+#   |LG_LGBM_V4_TYLER20     | 0.0036| 0.0122| 0.0153| 0.0138|        140|
+#   |LG_LGBM_V4_WALDO20     | 0.0007| 0.0019| 0.0032| 0.0031|        140|

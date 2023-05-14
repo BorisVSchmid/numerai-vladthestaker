@@ -3,9 +3,25 @@
 #
 ##############
 
+custom_query <- function(username) {paste0('query{v3UserProfile(modelName: \"',username,'\") {roundModelPerformances {
+                  corr
+                  corrWMetamodel
+                  corr20V2
+                  corrPercentile
+                  corr20V2Percentile
+                  tc
+                  tcPercentile
+                  roundNumber
+                  roundResolved
+                }
+              }
+            }'
+  )
+}
+
 model_performance <- function(modelName,fromRound,toRound) {
-  return(round_model_performances(username = str_to_lower(modelName),tournament=8) %>% 
-           dplyr::select(tc,tcPercentile,roundResolved,corrWMetamodel,corr,corrPercentile,roundNumber) %>% 
+  output <- run_query(query = custom_query(tolower(modelName)), auth=FALSE)$v3UserProfile$roundModelPerformances
+  return(output %>% 
            dplyr::filter(roundNumber >= fromRound) %>%
            dplyr::filter(roundNumber <= toRound))
 }
@@ -13,7 +29,6 @@ model_performance <- function(modelName,fromRound,toRound) {
 if (!exists("mem_model_performance")) {
   mem_model_performance <- memoise(model_performance)
 }
-
 
 # Load in the performance data. 
 #
@@ -34,9 +49,9 @@ build_RAW <- function (model_df,relative=FALSE) {
     # Add corr (1x by default)
     temp <- mem_model_performance(model_names[i],model_starts[i],model_ends[i])
     if (relative == TRUE) {
-      temp <- dplyr::select(temp,roundNumber,corrPercentile)
+      temp <- dplyr::select(temp,roundNumber,corr20V2Percentile)
     } else {
-      temp <- dplyr::select(temp,roundNumber,corr)
+      temp <- dplyr::select(temp,roundNumber,corr20V2)
     }
     temp$name <- paste0(model_names[i],"_corr")
     colnames(temp) <- c("roundNumber","score","name")
