@@ -17,7 +17,8 @@ library(groundhog)
 pkgs <- c("conflicted","dplyr","tidyr","knitr","readxl","tibble","stringr",
           "memoise","Rnumerai","fPortfolio",
           "ggplot2","ggrepel")
-groundhog.library(pkgs, "2023-04-21")
+#groundhog.library(pkgs, "2023-04-21") # For R-4.2.x
+groundhog.library(pkgs, "2023-07-05") # For R-4.3.0
 #
 # For a first time, you might have to restart and re-run the above code a few times. Follow the instructions.
 #
@@ -42,6 +43,11 @@ source("functions.R")
 NMR <- 1000 # Amount of NMR you want to stake in total.
 input_name <- "Optimize-Me"
 model_df <- read_excel(paste0(input_name,".xlsx"))
+#
+# Ignore model scores prior to the start of the daily rounds
+oldest_era <- 339
+model_df$`Starting Era` <- ifelse(model_df$`Starting Era` < oldest_era,oldest_era,model_df$`Starting Era`)
+#
 daily_data <- build_RAW(model_df)
 
 #
@@ -57,7 +63,7 @@ plot_corr$names <- rownames(plot_corr)
 plot_corr$sd <- colSds(daily_corr, na.rm = TRUE)
 colnames(plot_corr) <- c('mean','name','sd')
 g1 <- ggplot(plot_corr) + geom_point(aes(y=mean,x=sd)) + geom_label_repel(aes(y=mean,x=sd,label=name))
-ggsave("model-performances-corr.png",g1,scale=2)
+ggsave("model-performances-corr.png",g1,scale=1,width=10,height=10)
 
 # Plot tc scores
 plot_tc <- as.data.frame(colMeans(daily_tc, na.rm = TRUE))
@@ -65,7 +71,7 @@ plot_tc$names <- rownames(plot_tc)
 plot_tc$sd <- colSds(daily_tc, na.rm = TRUE)
 colnames(plot_tc) <- c('mean','name','sd')
 g2 <- ggplot(plot_tc) + geom_point(aes(y=mean,x=sd)) + geom_label_repel(aes(y=mean,x=sd,label=name))
-ggsave("model-performances-tc.png",g2,scale=2)
+ggsave("model-performances-tc.png",g2,scale=1,width=10,height=10)
 
 # Filter out those above 0 (or nearly 0)
 good_models_corr <- plot_corr[plot_corr$mean > 0,]$name
@@ -124,6 +130,33 @@ portfolio$tc_weight <- round(portfolio$tc_weight,3)
 
 kable(portfolio,caption = "Suggested portfolio. For models with both a _corr and a _tc component, either set up two model slots, or find a multiplier that works for both stakes")
 kable(singular,caption = "Expected returns based on separated weights")
+
+
+# 
+# Table: Suggested portfolio. For models with both a _corr and a _tc component, either set up two model slots, or find a multiplier that works for both stakes
+# 
+#   |name                | corr_weight| tc_weight| corr_0.5x| corr_1x| tc_0.5x| tc_1x| tc_1.5x| tc_2x| tc_2.5x| tc_3x|
+#   |:-------------------|-----------:|---------:|---------:|-------:|-------:|-----:|-------:|-----:|-------:|-----:|
+#   |INTEGRATION_TEST    |       0.380|     0.095|       760|     380|     190|   100|      60|    50|      40|    30|
+#   |LG_LGBM_V4_JEROME20 |       0.000|     0.211|         0|       0|     420|   210|     140|   110|      80|    70|
+#   |LG_LGBM_V4_TYLER20  |       0.000|     0.055|         0|       0|     110|    60|      40|    30|      20|    20|
+#   |LG_LGBM_V4_VICTOR20 |       0.249|     0.000|       500|     250|       0|     0|       0|     0|       0|     0|
+#   > kable(singular,caption = "Expected returns based on separated weights")
+# 
+# 
+# Table: Expected returns based on separated weights
+# 
+#   |                       |   mean|    Cov|   CVaR|    VaR| samplesize|
+#   |:----------------------|------:|------:|------:|------:|----------:|
+#   |portfolio              | 0.0070| 0.0205| 0.0330| 0.0287|        178|
+#   |portfolio1_tangency    | 0.0076| 0.0216| 0.0347| 0.0306|        178|
+#   |portfolio2_minvariance | 0.0064| 0.0203| 0.0322| 0.0282|        178|
+#   |INTEGRATION_TEST       | 0.0030| 0.0098| 0.0176| 0.0144|        178|
+#   |LG_LGBM_V4_JEROME20    | 0.0014| 0.0065| 0.0109| 0.0088|        178|
+#   |LG_LGBM_V4_TYLER20     | 0.0004| 0.0019| 0.0026| 0.0022|        178|
+#   |LG_LGBM_V4_VICTOR20    | 0.0022| 0.0066| 0.0112| 0.0106|        178|
+
+
 
 # 
 # Table: Suggested portfolio. For models with both a _corr and a _tc component, either set up two model slots, or find a multiplier that works for both stakes
