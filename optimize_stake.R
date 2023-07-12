@@ -48,8 +48,8 @@ model_df <- read_excel(paste0(input_name,".xlsx"))
 oldest_era <- 339
 model_df$`Starting Era` <- ifelse(model_df$`Starting Era` < oldest_era,oldest_era,model_df$`Starting Era`)
 #
-daily_data <- build_RAW(model_df)
-
+# If you want to use unresolved rounds, change to onlyresolved = FALSE. 
+daily_data <- build_RAW(model_df,onlyresolved = TRUE)
 #
 # To have more flexibility in creating good portfolios, each model is considered as an
 # independent _corr model and _tc model
@@ -73,7 +73,11 @@ colnames(plot_tc) <- c('mean','name','sd')
 g2 <- ggplot(plot_tc) + geom_point(aes(y=mean,x=sd)) + geom_label_repel(aes(y=mean,x=sd,label=name))
 ggsave("model-performances-tc.png",g2,scale=1,width=10,height=10)
 
-# Filter out those above 0 (or nearly 0)
+
+# Filter out those above 0
+#
+# This step helps the stability of the tangency portfolio selection
+#
 good_models_corr <- plot_corr[plot_corr$mean > 0,]$name
 good_models_tc <- plot_tc[plot_tc$mean > 0,]$name
 
@@ -89,9 +93,34 @@ for (i in 1:39) {
 portfolio1 <- portfolio1 %>% group_by(name) %>% summarise(corr_weight = sum(corr_weight) / 40, tc_weight = sum(tc_weight) / 40)
 portfolio2 <- portfolio2 %>% group_by(name) %>% summarise(corr_weight = sum(corr_weight) / 40, tc_weight = sum(tc_weight) / 40)
 
-# Join the two portfolios
-portfolio <- rbind(portfolio1,portfolio2)
-portfolio <- portfolio %>% group_by(name) %>% summarise(corr_weight = sum(corr_weight) / 2, tc_weight = sum(tc_weight) / 2)
+
+# Join the two portfolios when that makes sense (positive returns)
+#
+# Expanded this bit of code to build in a safety check. Sometimes the tangency portfolio algorithm can pick something really odd,
+# like a single negative-return model. Most of that behavior seems to have been stopped by selecting for positive-return models,
+# but when you start allowing negative return models to reduce risk by changing the filter step ("Filter out those above 0"), it helps
+# to have this safety check build in.
+#
+if (virtual_returns(portfolio1,daily_both,types="both")[1] > 0) {
+  if (virtual_returns(portfolio2,daily_both,types="both")[1] > 0) {
+    print("both tangency and minvariance portfolios are positive. Merging them")
+    portfolio <- rbind(portfolio1,portfolio2)
+    # Joining the two portfolios has some impact on the portfolio performance - as in: adding the same portfolio twice and dividing
+    # by 2 doesn't exactly give the same portfolio performance
+    portfolio <- portfolio %>% group_by(name) %>% summarise(corr_weight = sum(corr_weight) / 2, tc_weight = sum(tc_weight) / 2)
+  } else {
+    print("only tangency portfolio is positive. Using tangency portfolio")
+    portfolio <- portfolio1
+  } 
+} else {
+  if (virtual_returns(portfolio2,daily_both,types="both")[1] > 0) {
+    print("only minvariance portfolio is positive. Using minvariance portfolio")
+    portfolio <- portfolio2
+  } else {
+    print("neither portfolio has a positive return")
+  }
+}
+
 
 # Re-weight that anything that is < 5% gets zeroed out.
 portfolio <- portfolio[portfolio$corr_weight + portfolio$tc_weight > 0.05,]
@@ -130,56 +159,3 @@ portfolio$tc_weight <- round(portfolio$tc_weight,3)
 
 kable(portfolio,caption = "Suggested portfolio. For models with both a _corr and a _tc component, either set up two model slots, or find a multiplier that works for both stakes")
 kable(singular,caption = "Expected returns based on separated weights")
-
-
-# 
-# Table: Suggested portfolio. For models with both a _corr and a _tc component, either set up two model slots, or find a multiplier that works for both stakes
-# 
-#   |name                | corr_weight| tc_weight| corr_0.5x| corr_1x| tc_0.5x| tc_1x| tc_1.5x| tc_2x| tc_2.5x| tc_3x|
-#   |:-------------------|-----------:|---------:|---------:|-------:|-------:|-----:|-------:|-----:|-------:|-----:|
-#   |INTEGRATION_TEST    |       0.380|     0.095|       760|     380|     190|   100|      60|    50|      40|    30|
-#   |LG_LGBM_V4_JEROME20 |       0.000|     0.211|         0|       0|     420|   210|     140|   110|      80|    70|
-#   |LG_LGBM_V4_TYLER20  |       0.000|     0.055|         0|       0|     110|    60|      40|    30|      20|    20|
-#   |LG_LGBM_V4_VICTOR20 |       0.249|     0.000|       500|     250|       0|     0|       0|     0|       0|     0|
-#   > kable(singular,caption = "Expected returns based on separated weights")
-# 
-# 
-# Table: Expected returns based on separated weights
-# 
-#   |                       |   mean|    Cov|   CVaR|    VaR| samplesize|
-#   |:----------------------|------:|------:|------:|------:|----------:|
-#   |portfolio              | 0.0070| 0.0205| 0.0330| 0.0287|        178|
-#   |portfolio1_tangency    | 0.0076| 0.0216| 0.0347| 0.0306|        178|
-#   |portfolio2_minvariance | 0.0064| 0.0203| 0.0322| 0.0282|        178|
-#   |INTEGRATION_TEST       | 0.0030| 0.0098| 0.0176| 0.0144|        178|
-#   |LG_LGBM_V4_JEROME20    | 0.0014| 0.0065| 0.0109| 0.0088|        178|
-#   |LG_LGBM_V4_TYLER20     | 0.0004| 0.0019| 0.0026| 0.0022|        178|
-#   |LG_LGBM_V4_VICTOR20    | 0.0022| 0.0066| 0.0112| 0.0106|        178|
-
-
-
-# 
-# Table: Suggested portfolio. For models with both a _corr and a _tc component, either set up two model slots, or find a multiplier that works for both stakes
-# 
-#   |name                | corr_weight| tc_weight| corr_0.5x| corr_1x| tc_0.5x| tc_1x| tc_1.5x| tc_2x| tc_2.5x| tc_3x|
-#   |:-------------------|-----------:|---------:|---------:|-------:|-------:|-----:|-------:|-----:|-------:|-----:|
-#   |INTEGRATION_TEST    |       0.160|     0.170|       320|     160|     340|   170|     110|    90|      70|    60|
-#   |LG_LGBM_V4_JEROME20 |       0.026|     0.128|        50|      30|     260|   130|      90|    60|      50|    40|
-#   |LG_LGBM_V4_RALPH20  |       0.097|     0.000|       190|     100|       0|     0|       0|     0|       0|     0|
-#   |LG_LGBM_V4_TYLER20  |       0.000|     0.342|         0|       0|     680|   340|     230|   170|     140|   110|
-#   |LG_LGBM_V4_WALDO20  |       0.069|     0.006|       140|      70|      10|    10|       0|     0|       0|     0|
-#   > kable(singular,caption = "Expected returns based on separated weights")
-# 
-# 
-# Table: Expected returns based on separated weights
-# 
-#   |                       |   mean|    Cov|   CVaR|    VaR| samplesize|
-#   |:----------------------|------:|------:|------:|------:|----------:|
-#   |portfolio              | 0.0094| 0.0238| 0.0375| 0.0313|        140|
-#   |portfolio1_tangency    | 0.0102| 0.0252| 0.0387| 0.0307|        140|
-#   |portfolio2_minvariance | 0.0085| 0.0235| 0.0367| 0.0313|        140|
-#   |INTEGRATION_TEST       | 0.0032| 0.0078| 0.0147| 0.0108|        140|
-#   |LG_LGBM_V4_JEROME20    | 0.0013| 0.0042| 0.0068| 0.0061|        140|
-#   |LG_LGBM_V4_RALPH20     | 0.0006| 0.0025| 0.0041| 0.0039|        140|
-#   |LG_LGBM_V4_TYLER20     | 0.0036| 0.0122| 0.0153| 0.0138|        140|
-#   |LG_LGBM_V4_WALDO20     | 0.0007| 0.0019| 0.0032| 0.0031|        140|

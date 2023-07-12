@@ -19,11 +19,12 @@ custom_query <- function(username) {paste0('query{v3UserProfile(modelName: \"',u
   )
 }
 
-model_performance <- function(modelName,fromRound,toRound) {
-  output <- run_query(query = custom_query(tolower(modelName)), auth=FALSE)$v3UserProfile$roundModelPerformances
-  return(output %>% 
-           dplyr::filter(roundNumber >= fromRound) %>%
-           dplyr::filter(roundNumber <= toRound))
+model_performance <- function(modelName,fromRound,toRound,onlyresolved = FALSE) {
+  output <- run_query(query = custom_query(tolower(modelName)), auth=FALSE)$v3UserProfile$roundModelPerformances %>% 
+    dplyr::filter(roundNumber >= fromRound) %>%
+    dplyr::filter(roundNumber <= toRound) %>% 
+    dplyr::filter(roundResolved == TRUE | roundResolved == onlyresolved)
+  return(output)
 }
 
 if (!exists("mem_model_performance")) {
@@ -33,7 +34,7 @@ if (!exists("mem_model_performance")) {
 # Load in the performance data. 
 #
 # We are splitting up performance of a model into an _corr model and _tc model, and optimize those independently.
-build_RAW <- function (model_df,relative=FALSE) {
+build_RAW <- function (model_df,relative=FALSE, onlyresolved = FALSE) {
   
   model_names <- model_df$ModelName
   model_starts <- model_df$`Starting Era`
@@ -47,7 +48,7 @@ build_RAW <- function (model_df,relative=FALSE) {
     print(model_names[i])
     
     # Add corr (1x by default)
-    temp <- mem_model_performance(model_names[i],model_starts[i],model_ends[i])
+    temp <- mem_model_performance(model_names[i],model_starts[i],model_ends[i],onlyresolved)
     if (relative == TRUE) {
       temp <- dplyr::select(temp,roundNumber,corr20V2Percentile)
     } else {
@@ -58,7 +59,7 @@ build_RAW <- function (model_df,relative=FALSE) {
     RAW <- rbind(RAW,temp)
     
     # Add TC (1x by default)
-    temp <- mem_model_performance(model_names[i],model_starts[i],model_ends[i])
+    temp <- mem_model_performance(model_names[i],model_starts[i],model_ends[i], onlyresolved)
     if (relative == TRUE) {
       temp <- dplyr::select(temp,roundNumber,tcPercentile)
     } else {

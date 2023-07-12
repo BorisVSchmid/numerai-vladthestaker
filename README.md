@@ -1,5 +1,7 @@
 # vladthestaker
 
+For changelog see the CHANGELOG.md file
+
 ## Overview
 
 Vlad helps you decide your stake weights in Numer.ai. Use at your own risk. This script has been used by me for a while now, but no guarantees are provided.
