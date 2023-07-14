@@ -1,6 +1,20 @@
 # vladthestaker
 
 For changelog see the CHANGELOG.md file
+For a python alternative, see [numerai-portfolio-opt](https://github.com/eses-wk/numerai-portfolio-opt)
+
+## Warnings
+
+Vlad only considers portfolios with a average positive return. This is because I noticed that
+the tangency portfolio selection can be a bit wonky otherwise, and sometimes suggests portfolios
+with a negative-return based on a single model.
+
+An additional safeguard in Vlad is that if either the tangency or the minvariance portfolio has
+a negative expected return, then it is discarded and only the portfolio with a positive return
+is used.
+
+Particularly when you are just starting to use Vlad, use the model-performances-plot to see if
+the models selected by Vlad make sense to you.
 
 ## Overview
 
