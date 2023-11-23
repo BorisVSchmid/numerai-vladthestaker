@@ -1,16 +1,8 @@
+## Define model performance query
 #
-# Functions
-#
-##############
-
 custom_query <- function(username) {paste0('query{v3UserProfile(modelName: \"',username,'\") {roundModelPerformances {
-                  corr
-                  corrWMetamodel
                   corr20V2
-                  corrPercentile
-                  corr20V2Percentile
-                  tc
-                  tcPercentile
+                  mmc
                   roundNumber
                   roundResolved
                 }
@@ -19,27 +11,40 @@ custom_query <- function(username) {paste0('query{v3UserProfile(modelName: \"',u
   )
 }
 
-model_performance <- function(modelName,fromRound,toRound,onlyresolved = FALSE) {
-  output <- run_query(query = custom_query(tolower(modelName)), auth=FALSE)$v3UserProfile$roundModelPerformances %>% 
-    dplyr::filter(roundNumber >= fromRound) %>%
-    dplyr::filter(roundNumber <= toRound) %>% 
-    dplyr::filter(roundResolved == TRUE | roundResolved == onlyresolved)
+
+
+## Query model performance of all rounds since fromRound until last resolved round + 10 rounds
+# 
+model_performance <- function(modelName, fromRound) {
+  output <- run_query(query = custom_query(tolower(modelName)), auth=FALSE)$v3UserProfile$roundModelPerformances 
+  
+  # Start at the predefined fromRound
+  output <- output %>% dplyr::filter(roundNumber >= fromRound)
+
+  # We include rounds that are within 10 rounds of resolving.
+  last_resolved <- max(output %>% dplyr::filter(roundResolved == TRUE) %>% pull(roundNumber))
+  output <- output %>% dplyr::filter(roundNumber <= last_resolved + 10)
+  
   return(output)
 }
 
+
+
+## Memoize model performance query.
+#
 if (!exists("mem_model_performance")) {
   mem_model_performance <- memoise(model_performance)
 }
 
+
+
 # Load in the performance data. 
 #
-# We are splitting up performance of a model into an _corr model and _tc model, and optimize those independently.
-build_RAW <- function (model_df,relative=FALSE, onlyresolved = FALSE) {
+build_RAW <- function (model_df, MinfromRound = 1, corr_multiplier = 0, mmc_multiplier = 1) {
   
-  model_names <- model_df$ModelName
-  model_starts <- model_df$`Starting Era`
-  model_ends <- model_df$`Last Era`
-  
+  model_names <- model_df$name
+  model_starts <- model_df$start
+
   RAW <- data.frame()
   for (i in 1:length(model_names)) {
     
@@ -47,32 +52,32 @@ build_RAW <- function (model_df,relative=FALSE, onlyresolved = FALSE) {
     Sys.sleep(0.2)
     print(model_names[i])
     
-    # Add corr (1x by default)
-    temp <- mem_model_performance(model_names[i],model_starts[i],model_ends[i],onlyresolved)
-    if (relative == TRUE) {
-      temp <- dplyr::select(temp,roundNumber,corr20V2Percentile)
-    } else {
-      temp <- dplyr::select(temp,roundNumber,corr20V2)
-    }
-    temp$name <- paste0(model_names[i],"_corr")
-    colnames(temp) <- c("roundNumber","score","name")
-    RAW <- rbind(RAW,temp)
-    
-    # Add TC (1x by default)
-    temp <- mem_model_performance(model_names[i],model_starts[i],model_ends[i], onlyresolved)
-    if (relative == TRUE) {
-      temp <- dplyr::select(temp,roundNumber,tcPercentile)
-    } else {
-      temp <- dplyr::select(temp,roundNumber,tc)
-    }
-    temp$name <- paste0(model_names[i],"_tc")
-    colnames(temp) <- c("roundNumber","score","name")
+    temp <- mem_model_performance(model_names[i],max(MinfromRound,model_starts[i]))
+    temp <- dplyr::select(temp,roundNumber,corr20V2,mmc)
+    temp$score <- corr_multiplier * temp$corr20V2 + mmc_multiplier * temp$mmc 
+    colnames(temp) <- c("roundNumber","score")
+    temp <- dplyr::select(temp,roundNumber,score)
+    temp$name <- model_names[i]
     RAW <- rbind(RAW,temp)    
   }
   
-  data_ts <-  RAW %>% group_by(name,roundNumber) %>% dplyr::ungroup() %>% tidyr::pivot_wider(names_from = name,values_from = score) %>% dplyr::select(-roundNumber)
+  data_ts <-  RAW %>% group_by(name,roundNumber) %>% dplyr::ungroup() %>% tidyr::pivot_wider(names_from = name,values_from = score)
+  data_ts <- data.frame(dplyr::arrange(data_ts,roundNumber))
   
   return(data_ts)
+}
+
+
+
+## Cumulative Plotting function.
+# 
+cumulative_plot <- function(model_df,starting_era,good_models_all,daily,type) {
+  
+  subset_daily <- dplyr::filter(daily,roundNumber >= starting_era)
+  subset_data <- dplyr::select(subset_daily,roundNumber,paste0(good_models_all,type)) %>%
+                 mutate(across(-roundNumber, ~cumsum(replace_na(.x, 0))))
+  subset_data <- subset_data %>% pivot_longer(cols = -roundNumber, names_to = "model", values_to = "value")
+  ggplot(subset_data) + geom_line(aes(x=roundNumber,y=value,color=model))
 }
 
 
@@ -88,6 +93,8 @@ tangency_portfolio <- function(daily_data) {
   return(optimized)
 }
 
+
+
 minvariance_portfolio <- function(daily_data) {
   data <- daily_data
   spec <- portfolioSpec()
@@ -101,61 +108,56 @@ minvariance_portfolio <- function(daily_data) {
 
 
 
-#
-# Clean up the returned portfolio into something we can add to a dataframe.
+
+## Clean up the returned portfolio into something we can add to a dataframe.
 #
 cleanup_portfolio <- function(portfolio) {
   
   weights <- data.frame(getWeights(portfolio))
   colnames(weights) <- c("weight")
   weights <- rownames_to_column(weights, var = "name")
-  
-  # Some trouble to get this into a nice dataframe
-  corr_outcomes <- weights[grepl("_corr", weights$name),]
-  colnames(corr_outcomes) <- c("name","corr_weight")
-  corr_outcomes$name <- str_replace(corr_outcomes$name, "(_corr|_tc)","")
-  tc_outcomes <- weights[grepl("_tc", weights$name),]
-  colnames(tc_outcomes) <- c("name","tc_weight")
-  tc_outcomes$name <- str_replace(tc_outcomes$name, "(_corr|_tc)","")
-  outcome <- full_join(corr_outcomes,tc_outcomes)
-  try(outcome[is.na(outcome$corr_weight),]$corr_weight <- 0, silent = TRUE)
-  try(outcome[is.na(outcome$tc_weight),]$tc_weight <- 0, silent = TRUE)
-  
-  outcome <- outcome[outcome$corr_weight + outcome$tc_weight > 0.001,]
-  
-  return(outcome)
+  return(weights[weights$weight > 0.001,])
 } 
 
-virtual_returns <- function(merged_portfolio,data_ts,types="both") {
+## Calculate returns
+#
+virtual_returns <- function(daily,portfolio) {
   
-  if (types == "both") {
-    included <- c(paste0(merged_portfolio[merged_portfolio$corr_weight > 0,]$name,"_corr"),
-                  paste0(merged_portfolio[merged_portfolio$tc_weight > 0,]$name,"_tc"))
-  } else {
-    included <- c(paste0(merged_portfolio$name,"_",types))
-  }
+  daily <- dplyr::select(daily,portfolio$name)
   
-  daily_data <- dplyr::select(data_ts,any_of(included))
-  daily_data <- daily_data[complete.cases(daily_data),]
-  #
   ewSpec <- portfolioSpec()
   setType(ewSpec) <- "CVAR"
   setSolver(ewSpec) <- "solveRglpk.CVAR"
+
+  setWeights(ewSpec) <- portfolio$weight
+  port <- feasiblePortfolio(timeSeries(daily), spec = ewSpec, constraints = "LongOnly")
+  output <- c(round(fPortfolio::getTargetReturn(port)[1],4),
+           round(fPortfolio::getTargetRisk(port)[1],4),
+           round(fPortfolio::getTargetRisk(port)[3],4),
+           round(fPortfolio::getTargetRisk(port)[4],4),
+           samplesize = dim(daily)[1])
+  return(t(output))
+}
+
+
+# Build portfolios.
+#
+build_portfolio <- function(daily,threshold) {
+
+  portfolio1 <- tangency_portfolio(daily[sample(nrow(daily),replace = TRUE),]) %>% cleanup_portfolio()
+  portfolio2 <- minvariance_portfolio(daily[sample(nrow(daily),replace = TRUE),]) %>% cleanup_portfolio()
+  for (i in 1:39) {
+    portfolio1 <- rbind(portfolio1,tangency_portfolio(daily[sample(nrow(daily),replace = TRUE),]) %>% cleanup_portfolio())
+    portfolio2 <- rbind(portfolio2,minvariance_portfolio(daily[sample(nrow(daily),replace = TRUE),]) %>% cleanup_portfolio())
+  } 
+  portfolio <- rbind(portfolio1,portfolio2) %>% group_by(name) %>% summarise(weight = mean(weight))
   
-  weight_list <- c()
-  for (n in colnames(daily_data)) {
-    if (n %in% paste0(merged_portfolio$name,'_corr')) {
-      weight_list <- append(weight_list,merged_portfolio[paste0(merged_portfolio$name,'_corr') == n,]$corr_weight)
-    } else if (n %in% paste0(merged_portfolio$name,'_tc')) {
-      weight_list <- append(weight_list,merged_portfolio[paste0(merged_portfolio$name,'_tc') == n,]$tc_weight)
-    }
-  }
-  
-  setWeights(ewSpec) <- weight_list
-  port2 <- feasiblePortfolio(timeSeries(daily_data), spec = ewSpec, constraints = "LongOnly")
-  return(c(round(fPortfolio::getTargetReturn(port2)[1],4),
-           round(fPortfolio::getTargetRisk(port2)[1],4),
-           round(fPortfolio::getTargetRisk(port2)[3],4),
-           round(fPortfolio::getTargetRisk(port2)[4],4),
-           samplesize = dim(daily_data)[1]))
+  # rebalance to remove small weights
+  portfolio <- portfolio[portfolio$weight > threshold,]
+  portfolio$weight <- round(portfolio$weight * 1/sum(portfolio$weight),3)
+  #
+  # Calculating stakesize for different multipliers
+  #
+  portfolio$stake <- round(portfolio$weight * NMR)
+  return(portfolio)
 }
