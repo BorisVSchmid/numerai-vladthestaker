@@ -25,6 +25,7 @@ groundhog.library(pkgs, "2023-07-05") # For R-4.3.x. You can use "2023-04-21 for
 ## Read in program-specific functions
 #
 source("functions.R")
+options(scipen = 999)
 
 
 
@@ -41,7 +42,9 @@ oldest_round <- min(model_df$start)
 ## Collect daily scores, and filter for models that have at least 60 data points (you shouldn't use Vlad for models with less data points)
 #  I have set the starting round at 339, as that is the first round of the daily tournament, but you are free to change that round back and forth.
 #
-daily_data <- build_RAW(model_df, MinfromRound = 339, corr_multiplier = 0, mmc_multiplier = 1)
+#  I have (temporarily?) set the starting round to 390, as the MMC scores before that timepoint are calculated with an older formula.
+#
+daily_data <- build_RAW(model_df, MinfromRound = 390, corr_multiplier = 0, mmc_multiplier = 1)
 daily_data <- daily_data[,colnames(daily_data) %in% colnames(daily_data)[colSums(!is.na(daily_data)) > 60]]
 
 

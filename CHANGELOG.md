@@ -18,3 +18,11 @@ If you want to use unresolved rounds, change the below line to onlyresolved = FA
 > daily_data <- build_RAW(model_df,onlyresolved = TRUE)
 
 Also added a warning and a check for when people start tinkering with what models to add. Sometimes the tangency portfolio algorithm malfunctions, and picks a single negative-return stock. Now you get a warning that says which portfolio was excluded 
+
+## WARNING
+
+Release 2.0.0 contains a bug that makes Vlad pull the corr20V2 scores as if they are MMC. Currently, the MMC scores aren't backfilled yet, so Vlad V2 isn't useful right now, unless you want to base your staking on corr20V2 scores.
+
+The culprit was line 58 in functions.R, where there is a ```colnames(temp) <- c("roundNumber","score")``` that shouldn't be there, which renames the _corr20V2_ column to that of _score_
+
+The latest build doesn't have that problem, but MMC is only partially backfilled right now, so Vlad is currently in limbo, waiting for enough MMC scores to be available to provide advice.
