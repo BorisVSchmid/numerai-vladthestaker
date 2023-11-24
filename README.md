@@ -3,6 +3,15 @@
 For changelog see the CHANGELOG.md file
 For a python alternative, see [numerai-portfolio-opt](https://github.com/eses-wk/numerai-portfolio-opt)
 
+
+## WARNING
+
+Release 2.0.0 contains a bug that makes Vlad pull the corr20V2 scores as if they are MMC. Currently, the MMC scores aren't backfilled yet, so Vlad V2 isn't useful right now, unless you want to base your staking on corr20V2 scores.
+
+The culprit was line 58 in functions.R, where there is a ```colnames(temp) <- c("roundNumber","score")``` that shouldn't be there, which renames the _corr20V2_ column to that of _score_
+
+The latest build doesn't have that problem, but MMC is only partially backfilled right now, so Vlad is currently in limbo, waiting for enough MMC scores to be available to provide advice.
+
 ## Warnings
 
 Vlad only considers portfolios with a average positive return. This is because I noticed that

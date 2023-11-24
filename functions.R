@@ -55,7 +55,6 @@ build_RAW <- function (model_df, MinfromRound = 1, corr_multiplier = 0, mmc_mult
     temp <- mem_model_performance(model_names[i],max(MinfromRound,model_starts[i]))
     temp <- dplyr::select(temp,roundNumber,corr20V2,mmc)
     temp$score <- corr_multiplier * temp$corr20V2 + mmc_multiplier * temp$mmc 
-    colnames(temp) <- c("roundNumber","score")
     temp <- dplyr::select(temp,roundNumber,score)
     temp$name <- model_names[i]
     RAW <- rbind(RAW,temp)    
