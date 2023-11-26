@@ -62,9 +62,11 @@ model_stats <- model_stats %>% mutate(sharpe = mean / sd,
                                       tSSR = ((mean / sd) * sqrt(size - 1)) / sqrt(1 - rho + rho * size))
 
 # plot stats
+model_stats$scaled <- unlist(lapply(unlist((lapply(model_stats$tSSR,max,0.01))),sqrt))
 ggplot(model_stats) + 
-  geom_point(aes(y=mean,x=sd, size=tSSR, fill = drawdown),color="black",shape=21) + 
+  geom_point(aes(y=mean,x=sd, size=scaled, fill = drawdown),color="black",shape=21) + 
   scale_fill_gradient(low="green",high="red") +
+  labs(size = "tSSR Sharpe") +
   geom_text_repel(aes(y=mean,x=sd,label=name),box.padding = 0.6,max.overlaps = 15, force_pull = 0.7,min.segment.length = 1.5)
 ggsave("model-performances.png",scale=1,width=15,height=15)
 
