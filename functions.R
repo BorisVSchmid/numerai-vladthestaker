@@ -122,7 +122,7 @@ cleanup_portfolio <- function(portfolio) {
 #
 virtual_returns <- function(daily,portfolio) {
   
-  daily <- dplyr::select(daily,portfolio$name)
+  daily <- dplyr::select(daily,portfolio$name) %>% na.omit()
   
   ewSpec <- portfolioSpec()
   setType(ewSpec) <- "CVAR"
