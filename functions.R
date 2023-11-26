@@ -83,10 +83,11 @@ cumulative_plot <- function(model_df,starting_era,good_models_all,daily,type) {
 
 tangency_portfolio <- function(daily_data) {
   data <- daily_data
+  dates <- seq.Date(from = as.Date("1900-01-01"), by = "day", length.out = dim(data)[1])
   spec <- portfolioSpec()
   setType(spec) <- "CVAR"
   setSolver(spec) <- "solveRglpk.CVAR"
-  TS <- timeSeries(data)
+  TS <- timeSeries(data,dates)
   colnames(TS) <- colnames(data)
   optimized <- tangencyPortfolio(TS, spec = spec, constraints = "LongOnly")
   return(optimized)
@@ -96,10 +97,11 @@ tangency_portfolio <- function(daily_data) {
 
 minvariance_portfolio <- function(daily_data) {
   data <- daily_data
+  dates <- seq.Date(from = as.Date("1900-01-01"), by = "day", length.out = dim(data)[1])
   spec <- portfolioSpec()
   setType(spec) <- "CVAR"
   setSolver(spec) <- "solveRglpk.CVAR"
-  TS <- timeSeries(data)
+  TS <- timeSeries(data,dates)
   colnames(TS) <- colnames(data)
   optimized <- minvariancePortfolio(TS, spec = spec, constraints = "LongOnly")
   return(optimized)
@@ -123,13 +125,14 @@ cleanup_portfolio <- function(portfolio) {
 virtual_returns <- function(daily,portfolio) {
   
   daily <- dplyr::select(daily,portfolio$name) %>% na.omit()
+  dates <- seq.Date(from = as.Date("1900-01-01"), by = "day", length.out = dim(daily)[1])
   
   ewSpec <- portfolioSpec()
   setType(ewSpec) <- "CVAR"
   setSolver(ewSpec) <- "solveRglpk.CVAR"
 
   setWeights(ewSpec) <- portfolio$weight
-  port <- feasiblePortfolio(timeSeries(daily), spec = ewSpec, constraints = "LongOnly")
+  port <- feasiblePortfolio(timeSeries(daily, dates), spec = ewSpec, constraints = "LongOnly")
   output <- c(round(fPortfolio::getTargetReturn(port)[1],4),
            round(fPortfolio::getTargetRisk(port)[1],4),
            round(fPortfolio::getTargetRisk(port)[3],4),

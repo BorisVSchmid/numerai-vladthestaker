@@ -166,13 +166,17 @@ kable(condensed,digits=3)
 #   |V4_LGBM_VICTOR20   |  0.339|    48|       |       |       |       |           |
 
 
+
 # This is numer.ai's current stake distribution for models with a samplesize > 100. (nov 2023)
 numerai_stake <- dplyr::filter(model_df,name %in% (dplyr::filter(model_stats, first_round < 400) %>% pull(name)))
 colnames(numerai_stake) <- c("name","weight","stake")
 numerai_stake$weight <- numerai_stake$stake / sum(numerai_stake$stake)
 
-# You can calculate its return by feeding virtual_returns the daily_data and a dataframe of c(name, weight)
-kable(virtual_returns(daily_data,numerai_stake), digits=3)
 
-#       mean   Cov   CVaR    VaR samplesize
-# [1,] 0.0027 0.009 0.0148 0.0122        272
+# You can calculate its return by feeding virtual_returns the daily_data and a dataframe of c(name, weight)
+kable(virtual_returns(daily_data,numerai_stake), digits=4)
+
+#   |   mean|   Cov|   CVaR|    VaR| samplesize|
+#   |------:|-----:|------:|------:|----------:|
+#   | 0.0027| 0.009| 0.0148| 0.0122|        272|
+   
