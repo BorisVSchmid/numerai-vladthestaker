@@ -37,7 +37,7 @@ First, you will get an image that shows to you how your models perform in terms 
 
 Second, your models will get grouped based on how complete their time series is. Did you add a bunch of models two months ago? then two months ago is another 'starting point' for considering which models to stake on. Splitting the time series of all your models by starting points ensures that Vlad isn't disregarding the information of your older models, just because your new models don't go back that far in time.
 
-You will get an intermediate table showing per starting point what your optimal portfolio is. In the case of the Numer.ai benchmark models, the V3_EXAMPLE_PREDS model has no scores for round 339, so is excluded from the portfolio optimization starting from round 339. But it has values from round 340 onwards, so round 340 is a second starting point, and there the V3_EXAMPLE_PREDS model is considered an valuable model to blend into your stakes.
+You will get an intermediate table showing per starting point what your optimal portfolio is. In the case of the Numer.ai benchmark models, the V3_EXAMPLE_PREDS model has no scores for round 339, so is excluded from the portfolio optimization starting from round 339. But it has values from round 340 onwards, so round 340 is a second starting point, and there the V3_EXAMPLE_PREDS model is considered when calculating which models to stake on.
 
 ```
   |name               |weight |stake |mean   |Cov    |CVaR   |VaR    |samplesize |starting_round |
