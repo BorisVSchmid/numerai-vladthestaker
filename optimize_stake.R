@@ -105,7 +105,7 @@ for (point in starting_points) {
     relevant_models <- dplyr::filter(good_models,first_round <= point) %>% pull(name)
     daily <- daily_data %>% dplyr::filter(roundNumber >= point) %>% dplyr::select(all_of(relevant_models)) %>% na.omit()
     portfolio <- build_portfolio(daily,threshold = threshold)
-    newreturns <- as.data.frame(unlist(virtual_returns(daily,portfolio)))
+    newreturns <- as.data.frame(unlist(virtual_returns(daily_data,portfolio)))
     merged <- cbind(portfolio,newreturns)
     merged$starting_round <- point
     merged[2:nrow(merged),4:9] <- ""
@@ -123,8 +123,7 @@ condensed <- combined %>% dplyr::filter(name != "") %>% dplyr::select(name,weigh
 condensed$weight <- as.numeric(condensed$weight)
 condensed$stake <- as.numeric(condensed$stake)
 condensed <- condensed %>% group_by(name) %>% summarise(weight = sum(weight)/sum(condensed$weight), stake = sum(stake)/sum(condensed$weight))
-daily <- daily_data %>% dplyr::select(condensed$name) %>% na.omit()
-condensed_returns <- as.data.frame(unlist(virtual_returns(daily,condensed)))
+condensed_returns <- as.data.frame(unlist(virtual_returns(daily_data,condensed)))
 condensed <- cbind(condensed,condensed_returns)
 condensed[2:nrow(condensed),4:8] <- ""
 condensed$stake <- round(condensed$stake)
@@ -155,8 +154,8 @@ kable(combined,digits=3)
 ## Printout combined portfolio across starting rounds (equal weight for each starting points for now)
 #
 kable(condensed,digits=3)
-
-
+# 
+# 
 #   |name               | weight| stake|mean   |Cov    |CVaR   |VaR    |samplesize |
 #   |:------------------|------:|-----:|:------|:------|:------|:------|:----------|
 #   |INTEGRATION_TEST   |  0.266|    38|0.0041 |0.0073 |0.0078 |0.0053 |272        |
@@ -165,3 +164,15 @@ kable(condensed,digits=3)
 #   |V4_LGBM_NOMI20     |  0.086|    12|       |       |       |       |           |
 #   |V4_LGBM_TYLER60    |  0.103|    14|       |       |       |       |           |
 #   |V4_LGBM_VICTOR20   |  0.339|    48|       |       |       |       |           |
+
+
+# This is numer.ai's current stake distribution for models with a samplesize > 100. (nov 2023)
+numerai_stake <- dplyr::filter(model_df,name %in% (dplyr::filter(model_stats, first_round < 400) %>% pull(name)))
+colnames(numerai_stake) <- c("name","weight","stake")
+numerai_stake$weight <- numerai_stake$stake / sum(numerai_stake$stake)
+
+# You can calculate its return by feeding virtual_returns the daily_data and a dataframe of c(name, weight)
+kable(virtual_returns(daily_data,numerai_stake), digits=3)
+
+#       mean   Cov   CVaR    VaR samplesize
+# [1,] 0.0027 0.009 0.0148 0.0122        272
