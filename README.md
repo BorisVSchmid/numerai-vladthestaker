@@ -3,15 +3,6 @@
 For changelog see the CHANGELOG.md file
 For a python alternative, see [numerai-portfolio-opt](https://github.com/eses-wk/numerai-portfolio-opt)
 
-
-## WARNING
-
-Release 2.0.0 contains a bug that makes Vlad pull the corr20V2 scores as if they are MMC. Currently, the MMC scores aren't backfilled yet, so Vlad V2 isn't useful right now, unless you want to base your staking on corr20V2 scores.
-
-The culprit was line 58 in functions.R, where there is a ```colnames(temp) <- c("roundNumber","score")``` that shouldn't be there, which renames the _corr20V2_ column to that of _score_
-
-The latest build doesn't have that problem, but MMC is only partially backfilled right now, so Vlad is currently in limbo, waiting for enough MMC scores to be available to provide advice.
-
 ## Warnings
 
 Vlad only considers portfolios with a average positive return. This is because I noticed that
@@ -49,28 +40,35 @@ Second, your models will get grouped based on how complete their time series is.
 You will get an intermediate table showing per starting point what your optimal portfolio is. In the case of the Numer.ai benchmark models, the V3_EXAMPLE_PREDS model has no scores for round 339, so is excluded from the portfolio optimization starting from round 339. But it has values from round 340 onwards, so round 340 is a second starting point, and there the V3_EXAMPLE_PREDS model is considered an valuable model to blend into your stakes.
 
 ```
-|name              |weight |stake |mean   |Cov    |CVaR   |VaR    |samplesize |starting_round |
-|:-----------------|:------|:-----|:------|:------|:------|:------|:----------|:--------------|
-|INTEGRATION_TEST  |0.746  |106   |0.0082 |0.0195 |0.0269 |0.0242 |270        |339            |
-|V42_EXAMPLE_PREDS |0.135  |19    |       |       |       |       |           |               |
-|V42_RAIN_ENSEMBLE |0.119  |17    |       |       |       |       |           |               |
-|                  |       |      |       |       |       |       |           |               |
-|INTEGRATION_TEST  |0.442  |63    |0.0074 |0.018  |0.0269 |0.0234 |269        |340            |
-|V3_EXAMPLE_PREDS  |0.309  |44    |       |       |       |       |           |               |
-|V42_EXAMPLE_PREDS |0.143  |20    |       |       |       |       |           |               |
-|V42_RAIN_ENSEMBLE |0.105  |15    |       |       |       |       |           |               |
-|                  |       |      |       |       |       |       |           |               |
+  |name               |weight |stake |mean   |Cov    |CVaR   |VaR    |samplesize |starting_round |
+  |:------------------|:------|:-----|:------|:------|:------|:------|:----------|:--------------|
+  |INTEGRATION_TEST   |0.297  |42    |0.0043 |0.0078 |0.0078 |0.0066 |273        |339            |
+  |V42_RAIN_ENSEMBLE2 |0.098  |14    |       |       |       |       |           |               |
+  |V4_LGBM_NOMI20     |0.093  |13    |       |       |       |       |           |               |
+  |V4_LGBM_TYLER60    |0.133  |19    |       |       |       |       |           |               |
+  |V4_LGBM_VICTOR20   |0.379  |54    |       |       |       |       |           |               |
+  |                   |       |      |       |       |       |       |           |               |
+  |INTEGRATION_TEST   |0.236  |34    |0.004  |0.0074 |0.009  |0.0065 |272        |340            |
+  |V2_EXAMPLE_PREDS   |0.225  |32    |       |       |       |       |           |               |
+  |V42_RAIN_ENSEMBLE2 |0.087  |12    |       |       |       |       |           |               |
+  |V4_LGBM_NOMI20     |0.08   |11    |       |       |       |       |           |               |
+  |V4_LGBM_TYLER60    |0.073  |10    |       |       |       |       |           |               |
+  |V4_LGBM_VICTOR20   |0.299  |43    |       |       |       |       |           |               |
+  |                   |       |      |       |       |       |       |           |               |
 ```
 
 Finally, the last table merges the suggested stake distributions of your different starting points into a single stake distribution. 
 
 ```
-|name              | weight| stake|mean   |Cov    |CVaR   |VaR    |samplesize |
-|:-----------------|------:|-----:|:------|:------|:------|:------|:----------|
-|INTEGRATION_TEST  |  0.594|    85|0.0078 |0.0187 |0.0267 |0.0242 |269        |
-|V3_EXAMPLE_PREDS  |  0.155|    22|       |       |       |       |           |
-|V42_EXAMPLE_PREDS |  0.139|    20|       |       |       |       |           |
-|V42_RAIN_ENSEMBLE |  0.112|    16|       |       |       |       |           |
+  |name               | weight| stake|mean   |Cov    |CVaR   |VaR    |samplesize |
+  |:------------------|------:|-----:|:------|:------|:------|:------|:----------|
+  |INTEGRATION_TEST   |  0.266|    38|0.0041 |0.0073 |0.0078 |0.0053 |272        |
+  |V2_EXAMPLE_PREDS   |  0.112|    16|       |       |       |       |           |
+  |V42_RAIN_ENSEMBLE2 |  0.092|    13|       |       |       |       |           |
+  |V4_LGBM_NOMI20     |  0.086|    12|       |       |       |       |           |
+  |V4_LGBM_TYLER60    |  0.103|    14|       |       |       |       |           |
+  |V4_LGBM_VICTOR20   |  0.339|    48|       |       |       |       |           |
+
 ```
 The columns _mean_, _covariance_ and _samplesize_ should be fairly self-evident, but for _CVaR_ and _VaR_ I'll gladly let ChatGPT explain those below.
 

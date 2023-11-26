@@ -42,9 +42,7 @@ oldest_round <- min(model_df$start)
 ## Collect daily scores, and filter for models that have at least 60 data points (you shouldn't use Vlad for models with less data points)
 #  I have set the starting round at 339, as that is the first round of the daily tournament, but you are free to change that round back and forth.
 #
-#  I have (temporarily?) set the starting round to 390, as the MMC scores before that timepoint are calculated with an older formula.
-#
-daily_data <- build_RAW(model_df, MinfromRound = 390, corr_multiplier = 0, mmc_multiplier = 1)
+daily_data <- build_RAW(model_df, MinfromRound = 339, corr_multiplier = 0, mmc_multiplier = 1)
 daily_data <- daily_data[,colnames(daily_data) %in% colnames(daily_data)[colSums(!is.na(daily_data)) > 60]]
 
 
@@ -65,8 +63,9 @@ model_stats <- model_stats %>% mutate(sharpe = mean / sd,
 
 # plot stats
 ggplot(model_stats) + 
-  geom_point(aes(y=mean,x=sd, size = tSSR, alpha = 1-drawdown)) + 
-  geom_label_repel(aes(y=mean,x=sd,label=name),box.padding = 0.5, point.padding = 0.5,max.overlaps = 15)
+  geom_point(aes(y=mean,x=sd, size=tSSR, fill = drawdown),color="black",shape=21) + 
+  scale_fill_gradient(low="green",high="red") +
+  geom_text_repel(aes(y=mean,x=sd,label=name),box.padding = 0.6,max.overlaps = 15, force_pull = 0.7,min.segment.length = 1.5)
 ggsave("model-performances.png",scale=1,width=15,height=15)
 
 
@@ -77,10 +76,10 @@ ggsave("model-performances.png",scale=1,width=15,height=15)
 # and what their stake-weighted drawdown is. I put the thresholds a little below that mean and a little above that drawdown.
 #
 # numerai_perf <- left_join(model_df,dplyr::select(model_stats,name,mean,drawdown)) %>% na.omit()
-# sum(numerai_perf$mean * numerai_perf$notes) / sum(numerai_perf$notes) # 0.00626 mean
-# sum(numerai_perf$drawdown * numerai_perf$notes) / sum(numerai_perf$notes) # 0.64 drawdown
+# sum(numerai_perf$mean * numerai_perf$notes) / sum(numerai_perf$notes) # 0.00267 weighted mean
+# sum(numerai_perf$drawdown * numerai_perf$notes) / sum(numerai_perf$notes) # 0.53 weighted drawdown
 #
-good_models <- model_stats %>% dplyr::filter(mean > 0.005, drawdown < 0.8)
+good_models <- model_stats %>% dplyr::filter(mean > 0.0025, drawdown < 0.6)
 
 
 
@@ -134,27 +133,33 @@ condensed$stake <- round(condensed$stake)
 #
 kable(combined,digits=3)
 
-#   |name              |weight |stake |mean   |Cov    |CVaR   |VaR    |samplesize |starting_round |
-#   |:-----------------|:------|:-----|:------|:------|:------|:------|:----------|:--------------|
-#   |INTEGRATION_TEST  |0.746  |106   |0.0082 |0.0195 |0.0269 |0.0242 |270        |339            |
-#   |V42_EXAMPLE_PREDS |0.135  |19    |       |       |       |       |           |               |
-#   |V42_RAIN_ENSEMBLE |0.119  |17    |       |       |       |       |           |               |
-#   |                  |       |      |       |       |       |       |           |               |
-#   |INTEGRATION_TEST  |0.442  |63    |0.0074 |0.018  |0.0269 |0.0234 |269        |340            |
-#   |V3_EXAMPLE_PREDS  |0.309  |44    |       |       |       |       |           |               |
-#   |V42_EXAMPLE_PREDS |0.143  |20    |       |       |       |       |           |               |
-#   |V42_RAIN_ENSEMBLE |0.105  |15    |       |       |       |       |           |               |
-#   |                  |       |      |       |       |       |       |           |               |
 
-
+#   |name               |weight |stake |mean   |Cov    |CVaR   |VaR    |samplesize |starting_round |
+#   |:------------------|:------|:-----|:------|:------|:------|:------|:----------|:--------------|
+#   |INTEGRATION_TEST   |0.297  |42    |0.0043 |0.0078 |0.0078 |0.0066 |273        |339            |
+#   |V42_RAIN_ENSEMBLE2 |0.098  |14    |       |       |       |       |           |               |
+#   |V4_LGBM_NOMI20     |0.093  |13    |       |       |       |       |           |               |
+#   |V4_LGBM_TYLER60    |0.133  |19    |       |       |       |       |           |               |
+#   |V4_LGBM_VICTOR20   |0.379  |54    |       |       |       |       |           |               |
+#   |                   |       |      |       |       |       |       |           |               |
+#   |INTEGRATION_TEST   |0.236  |34    |0.004  |0.0074 |0.009  |0.0065 |272        |340            |
+#   |V2_EXAMPLE_PREDS   |0.225  |32    |       |       |       |       |           |               |
+#   |V42_RAIN_ENSEMBLE2 |0.087  |12    |       |       |       |       |           |               |
+#   |V4_LGBM_NOMI20     |0.08   |11    |       |       |       |       |           |               |
+#   |V4_LGBM_TYLER60    |0.073  |10    |       |       |       |       |           |               |
+#   |V4_LGBM_VICTOR20   |0.299  |43    |       |       |       |       |           |               |
+#   |                   |       |      |       |       |       |       |           |               |
 
 ## Printout combined portfolio across starting rounds (equal weight for each starting points for now)
 #
 kable(condensed,digits=3)
 
-#   |name              | weight| stake|mean   |Cov    |CVaR   |VaR    |samplesize |
-#   |:-----------------|------:|-----:|:------|:------|:------|:------|:----------|
-#   |INTEGRATION_TEST  |  0.594|    85|0.0078 |0.0187 |0.0267 |0.0242 |269        |
-#   |V3_EXAMPLE_PREDS  |  0.155|    22|       |       |       |       |           |
-#   |V42_EXAMPLE_PREDS |  0.139|    20|       |       |       |       |           |
-#   |V42_RAIN_ENSEMBLE |  0.112|    16|       |       |       |       |           |
+
+#   |name               | weight| stake|mean   |Cov    |CVaR   |VaR    |samplesize |
+#   |:------------------|------:|-----:|:------|:------|:------|:------|:----------|
+#   |INTEGRATION_TEST   |  0.266|    38|0.0041 |0.0073 |0.0078 |0.0053 |272        |
+#   |V2_EXAMPLE_PREDS   |  0.112|    16|       |       |       |       |           |
+#   |V42_RAIN_ENSEMBLE2 |  0.092|    13|       |       |       |       |           |
+#   |V4_LGBM_NOMI20     |  0.086|    12|       |       |       |       |           |
+#   |V4_LGBM_TYLER60    |  0.103|    14|       |       |       |       |           |
+#   |V4_LGBM_VICTOR20   |  0.339|    48|       |       |       |       |           |
