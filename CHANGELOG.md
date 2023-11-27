@@ -1,3 +1,8 @@
+### 2023-11-27: V2.0.2 [WEIGHTS UPDATE]. 
+
+Numer.ai published the multipliers they are going to use - it is 0.5xCORR + 2xMMC. Vlad was ready for the change.
+
+
 ### 2023-11-26: V2.0.1 [BUGFIX].
 
 MMC scores are now filled in by Numer.ai, and the bug in v2.0.0 is fixed. Vlad is usable!
