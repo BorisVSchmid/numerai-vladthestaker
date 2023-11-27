@@ -94,41 +94,41 @@ table(starting_points)
 
   
   
-  ## Calculate portfolios from each of the starting points onwards.
-  #
-  # use threshold to remove small stakes from the portfolios (this limits the
-  # final number of models you would have to stake on)
-  threshold <- 0.1
-  #
-  combined <- data.frame()
-  for (point in starting_points) {
-    print(point)
-    tryCatch({
-      relevant_models <- dplyr::filter(good_models,first_round <= point) %>% pull(name)
-      daily <- daily_data %>% dplyr::filter(roundNumber >= point) %>% dplyr::select(all_of(relevant_models)) %>% na.omit()
-      portfolio <- build_portfolio(daily,threshold = threshold)
-      newreturns <- as.data.frame(unlist(virtual_returns(daily_data,portfolio)))
-      merged <- cbind(portfolio,newreturns)
-      merged$starting_round <- point
-      merged[2:nrow(merged),4:9] <- ""
-      combined <- rbind(combined,merged,"")
-    }, error = function(e) {
-      message("An error occurred: ", e$message)
-    })
-  }
+## Calculate portfolios from each of the starting points onwards.
+#
+# use threshold to remove small stakes from the portfolios (this limits the
+# final number of models you would have to stake on)
+threshold <- 0.1
+#
+combined <- data.frame()
+for (point in starting_points) {
+  print(point)
+  tryCatch({
+    relevant_models <- dplyr::filter(good_models,first_round <= point) %>% pull(name)
+    daily <- daily_data %>% dplyr::filter(roundNumber >= point) %>% dplyr::select(all_of(relevant_models)) %>% na.omit()
+    portfolio <- build_portfolio(daily,threshold = threshold)
+    newreturns <- as.data.frame(unlist(virtual_returns(daily_data,portfolio)))
+    merged <- cbind(portfolio,newreturns)
+    merged$starting_round <- point
+    merged[2:nrow(merged),4:9] <- ""
+    combined <- rbind(combined,merged,"")
+  }, error = function(e) {
+    message("An error occurred: ", e$message)
+  })
+}
   
   
   
-  ## Calculate merged portfolio (stake on this, submit a metapopulation model weighted to this.)
-  #
-  condensed <- combined %>% dplyr::filter(name != "") %>% dplyr::select(name,weight,stake)
-  condensed$weight <- as.numeric(condensed$weight)
-  condensed$stake <- as.numeric(condensed$stake)
-  condensed <- condensed %>% group_by(name) %>% summarise(weight = sum(weight)/sum(condensed$weight), stake = sum(stake)/sum(condensed$weight))
-  condensed_returns <- as.data.frame(unlist(virtual_returns(daily_data,condensed)))
-  condensed <- cbind(condensed,condensed_returns)
-  condensed[2:nrow(condensed),4:8] <- ""
-  condensed$stake <- round(condensed$stake)
+## Calculate merged portfolio (stake on this, submit a metapopulation model weighted to this.)
+#
+condensed <- combined %>% dplyr::filter(name != "") %>% dplyr::select(name,weight,stake)
+condensed$weight <- as.numeric(condensed$weight)
+condensed$stake <- as.numeric(condensed$stake)
+condensed <- condensed %>% group_by(name) %>% summarise(weight = sum(weight)/sum(condensed$weight), stake = sum(stake)/sum(condensed$weight))
+condensed_returns <- as.data.frame(unlist(virtual_returns(daily_data,condensed)))
+condensed <- cbind(condensed,condensed_returns)
+condensed[2:nrow(condensed),4:8] <- ""
+condensed$stake <- round(condensed$stake)
   
 
 
@@ -149,7 +149,7 @@ kable(combined,digits=3)
 
 
 ## Printout combined portfolio across starting rounds (equal weight for each starting points for now)
-#  For Numre.ai's models, the two timepoints (starting_round 339 and 340) don't matter much.
+# For Numer.ai's models, the two timepoints (starting_round 339 and 340) don't matter much, so merging them changes little.
 #
 kable(condensed,digits=3)
 

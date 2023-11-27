@@ -5,9 +5,10 @@ For a python alternative, see [numerai-portfolio-opt](https://github.com/eses-wk
 
 ## Warnings
 
-Vlad only considers portfolios with a average positive return. This is because I noticed that
+Vlad should only consider portfolios with an average positive return. This is because I noticed that
 the tangency portfolio selection can be a bit wonky otherwise, and sometimes suggests portfolios
-with a negative-return based on a single model.
+with a negative-return based on a single model. By default, Vlad uses 80% of the mean benchmark-models 
+scores, which in general is positive.
 
 Particularly when you are just starting to use Vlad, use the model-performances-plot to see if
 the models selected by Vlad make sense to you.
@@ -40,35 +41,27 @@ Second, your models will get grouped based on how complete their time series is.
 You will get an intermediate table showing per starting point what your optimal portfolio is. In the case of the Numer.ai benchmark models, the V3_EXAMPLE_PREDS model has no scores for round 339, so is excluded from the portfolio optimization starting from round 339. But it has values from round 340 onwards, so round 340 is a second starting point, and there the V3_EXAMPLE_PREDS model is considered when calculating which models to stake on.
 
 ```
-  |name               |weight |stake |mean   |Cov    |CVaR   |VaR    |samplesize |starting_round |
-  |:------------------|:------|:-----|:------|:------|:------|:------|:----------|:--------------|
-  |INTEGRATION_TEST   |0.297  |42    |0.0043 |0.0078 |0.0078 |0.0066 |273        |339            |
-  |V42_RAIN_ENSEMBLE2 |0.098  |14    |       |       |       |       |           |               |
-  |V4_LGBM_NOMI20     |0.093  |13    |       |       |       |       |           |               |
-  |V4_LGBM_TYLER60    |0.133  |19    |       |       |       |       |           |               |
-  |V4_LGBM_VICTOR20   |0.379  |54    |       |       |       |       |           |               |
-  |                   |       |      |       |       |       |       |           |               |
-  |INTEGRATION_TEST   |0.236  |34    |0.004  |0.0074 |0.009  |0.0065 |272        |340            |
-  |V2_EXAMPLE_PREDS   |0.225  |32    |       |       |       |       |           |               |
-  |V42_RAIN_ENSEMBLE2 |0.087  |12    |       |       |       |       |           |               |
-  |V4_LGBM_NOMI20     |0.08   |11    |       |       |       |       |           |               |
-  |V4_LGBM_TYLER60    |0.073  |10    |       |       |       |       |           |               |
-  |V4_LGBM_VICTOR20   |0.299  |43    |       |       |       |       |           |               |
-  |                   |       |      |       |       |       |       |           |               |
+   |name             |weight |stake |mean   |Cov    |CVaR   |VaR    |samplesize |starting_round |
+   |:----------------|:------|:-----|:------|:------|:------|:------|:----------|:--------------|
+   |INTEGRATION_TEST |0.412  |59    |0.0128 |0.0219 |0.0216 |0.0184 |273        |339            |
+   |V4_LGBM_VICTOR20 |0.458  |65    |       |       |       |       |           |               |
+   |V4_LGBM_VICTOR60 |0.13   |19    |       |       |       |       |           |               |
+   |                 |       |      |       |       |       |       |           |               |
+   |INTEGRATION_TEST |0.416  |59    |0.0128 |0.0218 |0.0215 |0.0182 |273        |340            |
+   |V4_LGBM_VICTOR20 |0.46   |66    |       |       |       |       |           |               |
+   |V4_LGBM_VICTOR60 |0.124  |18    |       |       |       |       |           |               |
+   |                 |       |      |       |       |       |       |           |               |
 ```
 
 Finally, the last table merges the suggested stake distributions of your different starting points into a single stake distribution. 
+For Numer.ai's models, the two timepoints (starting_round 339 and 340) don't matter much, so merging them changes little.
 
 ```
-  |name               | weight| stake|mean   |Cov    |CVaR   |VaR    |samplesize |
-  |:------------------|------:|-----:|:------|:------|:------|:------|:----------|
-  |INTEGRATION_TEST   |  0.266|    38|0.0041 |0.0073 |0.0078 |0.0053 |272        |
-  |V2_EXAMPLE_PREDS   |  0.112|    16|       |       |       |       |           |
-  |V42_RAIN_ENSEMBLE2 |  0.092|    13|       |       |       |       |           |
-  |V4_LGBM_NOMI20     |  0.086|    12|       |       |       |       |           |
-  |V4_LGBM_TYLER60    |  0.103|    14|       |       |       |       |           |
-  |V4_LGBM_VICTOR20   |  0.339|    48|       |       |       |       |           |
-
+   |name             | weight| stake|mean   |Cov    |CVaR   |VaR    |samplesize |
+   |:----------------|------:|-----:|:------|:------|:------|:------|:----------|
+   |INTEGRATION_TEST |  0.414|    59|0.0128 |0.0218 |0.0216 |0.0183 |273        |
+   |V4_LGBM_VICTOR20 |  0.459|    66|       |       |       |       |           |
+   |V4_LGBM_VICTOR60 |  0.127|    18|       |       |       |       |           |
 ```
 The columns _mean_, _covariance_ and _samplesize_ should be fairly self-evident, but for _CVaR_ and _VaR_ I'll gladly let ChatGPT explain those below.
 
