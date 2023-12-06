@@ -32,7 +32,7 @@ options(scipen = 999)
 ## Vlad Input Data and Settings
 #
 NMR <- 142.6
-model_df <- read_excel("Optimize-Me-23nov2023.xlsx")          # Read in the list of model names and their start (and possibly end) round.
+model_df <- read_excel("Optimize-Me-30nov2023.xlsx")          # Read in the list of model names and their start (and possibly end) round.
 colnames(model_df) <- c("name","start","notes")
 current_round <- Rnumerai::get_current_round()
 oldest_round <- min(model_df$start)
@@ -42,7 +42,7 @@ oldest_round <- min(model_df$start)
 ## Collect daily scores, and filter for models that have at least 60 data points (you shouldn't use Vlad for models with less data points)
 #  I have set the starting round at 339, as that is the first round of the daily tournament, but you are free to change that round back and forth.
 #
-daily_data <- build_RAW(model_df, MinfromRound = 339, corr_multiplier = 0.5, mmc_multiplier = 2)
+daily_data <- build_RAW(model_df, MinfromRound = 339, corr_multiplier = 0.5, mmc_multiplier = 3)
 daily_data <- daily_data[,colnames(daily_data) %in% colnames(daily_data)[colSums(!is.na(daily_data)) > 60]]
 
 
@@ -78,12 +78,13 @@ ggsave("model-performances.png",scale=1,width=15,height=15)
 # and what their stake-weighted drawdown is. I put the thresholds a little below that mean and a little above that drawdown.
 #
 # numerai_perf <- left_join(model_df,dplyr::select(model_stats,name,mean,drawdown)) %>% na.omit()
-# sum(numerai_perf$mean * numerai_perf$notes) / sum(numerai_perf$notes) # 0.00846 weighted mean
-benchmark_mean <- 0.00846
-# sum(numerai_perf$drawdown * numerai_perf$notes) / sum(numerai_perf$notes) # 0.829 weighted drawdown
-benchmark_drawdown <- 0.829
+# sum(numerai_perf$mean * numerai_perf$notes) / sum(numerai_perf$notes) # weighted mean
+benchmark_mean <- 0.00653
+# sum(numerai_perf$drawdown * numerai_perf$notes) / sum(numerai_perf$notes) # weighted drawdown
+benchmark_drawdown <- 0.841
 #
-good_models <- model_stats %>% dplyr::filter(mean > benchmark_mean * 0.8, drawdown < benchmark_drawdown / 0.8) # Tweak as you feel is suited.
+# Tweak these thresholds as you feel is most appropriate
+good_models <- model_stats %>% dplyr::filter(mean > benchmark_mean * 0.8, drawdown < benchmark_drawdown / 0.8)
 
 
 
@@ -98,7 +99,7 @@ table(starting_points)
 #
 # use threshold to remove small stakes from the portfolios (this limits the
 # final number of models you would have to stake on)
-threshold <- 0.1
+threshold <- 0.05
 #
 combined <- data.frame()
 for (point in starting_points) {
@@ -136,29 +137,35 @@ condensed$stake <- round(condensed$stake)
 #
 kable(combined,digits=3)
 
-#   |name             |weight |stake |mean   |Cov    |CVaR   |VaR    |samplesize |starting_round |
-#   |:----------------|:------|:-----|:------|:------|:------|:------|:----------|:--------------|
-#   |INTEGRATION_TEST |0.412  |59    |0.0128 |0.0219 |0.0216 |0.0184 |273        |339            |
-#   |V4_LGBM_VICTOR20 |0.458  |65    |       |       |       |       |           |               |
-#   |V4_LGBM_VICTOR60 |0.13   |19    |       |       |       |       |           |               |
-#   |                 |       |      |       |       |       |       |           |               |
-#   |INTEGRATION_TEST |0.416  |59    |0.0128 |0.0218 |0.0215 |0.0182 |273        |340            |
-#   |V4_LGBM_VICTOR20 |0.46   |66    |       |       |       |       |           |               |
-#   |V4_LGBM_VICTOR60 |0.124  |18    |       |       |       |       |           |               |
-#   |                 |       |      |       |       |       |       |           |               |
-
+#   |name                |weight |stake |mean   |Cov    |CVaR   |VaR    |samplesize |starting_round |
+#   |:-------------------|:------|:-----|:------|:------|:------|:------|:----------|:--------------|
+#   |INTEGRATION_TEST    |0.479  |68    |0.0196 |0.0201 |0.0117 |0.0079 |279        |339            |
+#   |V42_LGBM_CLAUDIA20  |0.221  |32    |       |       |       |       |           |               |
+#   |V42_LGBM_TEAGER20   |0.076  |11    |       |       |       |       |           |               |
+#   |V42_LGBM_TEAGER60   |0.162  |23    |       |       |       |       |           |               |
+#   |V4_LGBM_VICTOR20    |0.061  |9     |       |       |       |       |           |               |
+#   |                    |       |      |       |       |       |       |           |               |
+#   |INTEGRATION_TEST    |0.451  |64    |0.019  |0.0197 |0.0127 |0.0089 |279        |340            |
+#   |V41_LGBM_CAROLINE20 |0.049  |7     |       |       |       |       |           |               |
+#   |V42_LGBM_CLAUDIA20  |0.196  |28    |       |       |       |       |           |               |
+#   |V42_LGBM_TEAGER20   |0.072  |10    |       |       |       |       |           |               |
+#   |V42_LGBM_TEAGER60   |0.169  |24    |       |       |       |       |           |               |
+#   |V4_LGBM_VICTOR20    |0.064  |9     |       |       |       |       |           |               |
+#   |                    |       |      |       |       |       |       |           |               |
 
 ## Printout combined portfolio across starting rounds (equal weight for each starting points for now)
 # For Numer.ai's models, the two timepoints (starting_round 339 and 340) don't matter much, so merging them changes little.
 #
 kable(condensed,digits=3)
 
-#   |name             | weight| stake|mean   |Cov    |CVaR   |VaR    |samplesize |
-#   |:----------------|------:|-----:|:------|:------|:------|:------|:----------|
-#   |INTEGRATION_TEST |  0.414|    59|0.0128 |0.0218 |0.0216 |0.0183 |273        |
-#   |V4_LGBM_VICTOR20 |  0.459|    66|       |       |       |       |           |
-#   |V4_LGBM_VICTOR60 |  0.127|    18|       |       |       |       |           |
-
+#    name                | weight| stake|mean   |Cov    |CVaR  |VaR    |samplesize |
+#   |:-------------------|------:|-----:|:------|:------|:-----|:------|:----------|
+#   |INTEGRATION_TEST    |  0.465|    66|0.0193 |0.0199 |0.012 |0.0089 |279        |
+#   |V41_LGBM_CAROLINE20 |  0.024|     4|       |       |      |       |           |
+#   |V42_LGBM_CLAUDIA20  |  0.209|    30|       |       |      |       |           |
+#   |V42_LGBM_TEAGER20   |  0.074|    10|       |       |      |       |           |
+#   |V42_LGBM_TEAGER60   |  0.166|    24|       |       |      |       |           |
+#   |V4_LGBM_VICTOR20    |  0.062|     9|       |       |      |       |           |
 
 
 # This is numer.ai's current stake distribution for models with a samplesize > 100. (nov 2023)
@@ -170,8 +177,8 @@ numerai_stake$weight <- numerai_stake$stake / sum(numerai_stake$stake)
 # You can calculate its return by feeding virtual_returns the daily_data and a dataframe of c(name, weight)
 kable(virtual_returns(daily_data,numerai_stake), digits=4)
 
-#   |   mean|    Cov|   CVaR|    VaR| samplesize|
-#   |------:|------:|------:|------:|----------:|
-#   | 0.0086| 0.0267| 0.0444| 0.0413|        272|
+#   |   mean|    Cov|   CVaR|   VaR| samplesize|
+#   |------:|------:|------:|-----:|----------:|
+#   | 0.0066| 0.0257| 0.0486| 0.038|        278|
 
-# So, using Vlad suggests a higher account-wide return is possible against a lower covariance/CVaR and VaR. Time for stake management? :-).
+# So, using Vlad suggests a higher account-wide return is possible against a lower CVaR and VaR. Time for stake management? :-).
