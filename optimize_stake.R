@@ -31,8 +31,8 @@ options(scipen = 999)
 
 ## Vlad Input Data and Settings
 #
-model_df <- read_excel("Optimize-Me-30nov2023.xlsx")          # Read in the list of model names and their start (and possibly end) round.
-NMR <- 142.6 # sum(model_df$Notes) 142.6
+model_df <- read_excel("Optimize-Me-21dec2023.xlsx")          # Read in the list of model names and their start round. For the Benchmark models, I excluded INTEGRATION_TEST, as that model is being changed over time.
+NMR <- 215.541 # sum(model_df$Stakes)
 colnames(model_df) <- c("name","start","notes")
 current_round <- Rnumerai::get_current_round()
 oldest_round <- min(model_df$start)
@@ -79,9 +79,9 @@ ggsave("model-performances.png",scale=1,width=15,height=15)
 #
 # numerai_perf <- left_join(model_df,dplyr::select(model_stats,name,mean,drawdown)) %>% na.omit()
 # sum(numerai_perf$mean * numerai_perf$notes) / sum(numerai_perf$notes) # weighted mean
-benchmark_mean <- 0.00532
+benchmark_mean <- 0.00767
 # sum(numerai_perf$drawdown * numerai_perf$notes) / sum(numerai_perf$notes) # weighted drawdown
-benchmark_drawdown <- 0.755
+benchmark_drawdown <- 0.710
 #
 # Tweak these thresholds as you feel is most appropriate
 good_models <- model_stats %>% dplyr::filter(mean > benchmark_mean * 0.8, drawdown < benchmark_drawdown / 0.8)
@@ -137,41 +137,22 @@ condensed$stake <- round(condensed$stake)
 #
 kable(combined,digits=3)
 
+
 #   |name               |weight |stake |mean   |Cov    |CVaR   |VaR    |samplesize |starting_round |
 #   |:------------------|:------|:-----|:------|:------|:------|:------|:----------|:--------------|
-#   |INTEGRATION_TEST   |0.439  |63    |0.014  |0.0157 |0.0118 |0.0074 |289        |339            |
-#   |V41_LGBM_XERXES20  |0.051  |7     |       |       |       |       |           |               |
-#   |V42_LGBM_CLAUDIA20 |0.182  |26    |       |       |       |       |           |               |
-#   |V42_LGBM_ROWAN20   |0.064  |9     |       |       |       |       |           |               |
-#   |V42_LGBM_TEAGER20  |0.1    |14    |       |       |       |       |           |               |
-#   |V42_LGBM_TEAGER60  |0.117  |17    |       |       |       |       |           |               |
-#   |V4_LGBM_VICTOR20   |0.046  |7     |       |       |       |       |           |               |
-#   |                   |       |      |       |       |       |       |           |               |
-#   |INTEGRATION_TEST   |0.427  |61    |0.0142 |0.0163 |0.0129 |0.0084 |289        |340            |
-#   |V41_EXAMPLE_PREDS  |0.051  |7     |       |       |       |       |           |               |
-#   |V42_LGBM_CLAUDIA20 |0.163  |23    |       |       |       |       |           |               |
-#   |V42_LGBM_ROWAN20   |0.063  |9     |       |       |       |       |           |               |
-#   |V42_LGBM_TEAGER20  |0.099  |14    |       |       |       |       |           |               |
-#   |V42_LGBM_TEAGER60  |0.152  |22    |       |       |       |       |           |               |
-#   |V4_LGBM_VICTOR20   |0.045  |6     |       |       |       |       |           |               |
-#   |                   |       |      |       |       |       |       |           |               |
-
-
+#   |V42_EXAMPLE_PREDS  |0.044  |9     |0.0188 |0.0257 |0.0261 |0.0207 |291        |339            |
+#   |V42_LGBM_CLAUDIA20 |0.229  |49    |       |       |       |       |           |               |
+#   |V42_LGBM_CT_BLEND  |0.105  |23    |       |       |       |       |           |               |
+#   |V42_LGBM_ROWAN20   |0.075  |16    |       |       |       |       |           |               |
+#   |V42_LGBM_TEAGER20  |0.308  |66    |       |       |       |       |           |               |
+#   |V42_LGBM_TEAGER60  |0.093  |20    |       |       |       |       |           |               |
+#   |V4_LGBM_VICTOR20   |0.094  |20    |       |       |       |       |           |               |
+#   |V4_LGBM_VICTOR60   |0.053  |11    |       |       |       |       |           |               |
+  
 ## Printout combined portfolio across starting rounds (equal weight for each starting points for now)
-# For Numer.ai's models, the two timepoints (starting_round 339 and 340) don't matter much, so merging them changes little.
+# For Numer.ai's models, all models go back equally far, so there is nothing to merge
 #
-kable(condensed,digits=3)
-
-#   |name               | weight| stake|mean   |Cov   |CVaR   |VaR    |samplesize |
-#   |:------------------|------:|-----:|:------|:-----|:------|:------|:----------|
-#   |INTEGRATION_TEST   |  0.433|    62|0.0141 |0.016 |0.0123 |0.0078 |289        |
-#   |V41_EXAMPLE_PREDS  |  0.026|     4|       |      |       |       |           |
-#   |V41_LGBM_XERXES20  |  0.026|     4|       |      |       |       |           |
-#   |V42_LGBM_CLAUDIA20 |  0.173|    25|       |      |       |       |           |
-#   |V42_LGBM_ROWAN20   |  0.064|     9|       |      |       |       |           |
-#   |V42_LGBM_TEAGER20  |  0.100|    14|       |      |       |       |           |
-#   |V42_LGBM_TEAGER60  |  0.135|    20|       |      |       |       |           |
-#   |V4_LGBM_VICTOR20   |  0.046|     7|       |      |       |       |           |
+# kable(condensed,digits=3)
 
 
 # This is numer.ai's current stake distribution for models with a samplesize > 100. (nov 2023)
@@ -183,8 +164,8 @@ numerai_stake$weight <- numerai_stake$stake / sum(numerai_stake$stake)
 # You can calculate its return by feeding virtual_returns the daily_data and a dataframe of c(name, weight)
 kable(virtual_returns(daily_data,numerai_stake), digits=4)
 
-#   |   mean|  Cov|  CVaR|    VaR| samplesize|
-#   |------:|----:|-----:|------:|----------:|
-#   | 0.0054| 0.02| 0.038| 0.0298|        288|
+#   |   mean|    Cov|   CVaR|    VaR| samplesize|
+#   |------:|------:|------:|------:|----------:|
+#   | 0.0079| 0.0213| 0.0397| 0.0316|        290|
 
-# So, using Vlad suggests a higher account-wide return is possible against a lower CVaR and VaR. Time for stake management? :-).
+# So, using Vlad suggests a higher account-wide return is possible against a lower CVaR and VaR.
