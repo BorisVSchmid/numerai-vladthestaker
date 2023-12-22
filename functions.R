@@ -11,6 +11,20 @@ custom_query <- function(username) {paste0('query{v3UserProfile(modelName: \"',u
   )
 }
 
+acf1_pairwise <- function(series) {
+  if (!is.numeric(series) || length(series) < 2) {
+    stop("Series must be a numeric vector with at least two elements.")
+  }
+  
+  # Create a lagged version of the series
+  lagged_series <- c(NA, series[-length(series)])
+  
+  # Calculate the correlation with complete observations
+  acf1_value <- cor(series, lagged_series, use = "complete.obs")
+  
+  return(acf1_value)
+}
+
 
 
 ## Query model performance of all rounds since fromRound until last resolved round + 10 rounds
