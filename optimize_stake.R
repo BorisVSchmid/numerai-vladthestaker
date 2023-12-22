@@ -31,10 +31,11 @@ options(scipen = 999)
 
 ## Vlad Input Data and Settings
 #
-model_df <- read_excel("Optimize-Me-21dec2023.xlsx")          # Read in the list of model names and their start round. For the Benchmark models, I excluded INTEGRATION_TEST, as that model is being changed over time.
+model_df <- read_excel("Optimize-Me-21dec2023.xlsx")            # Read in the list of model names and their start round. For the Benchmark models, I excluded INTEGRATION_TEST, as that model is being changed over time.
 NMR <- 215.541 # sum(model_df$Stakes)
-colnames(model_df) <- c("name","start","notes")
+colnames(model_df) <- c("name","start","stakes")
 current_round <- Rnumerai::get_current_round()
+model_df <- dplyr::filter(model_df, start < current_round - 30) # These models have barely resolved, and don't need to be added in yet (and the query to collect the daily data will fail.)
 oldest_round <- min(model_df$start)
 
 
@@ -49,9 +50,11 @@ daily_data <- daily_data[,colnames(daily_data) %in% colnames(daily_data)[colSums
 
 ## calculate stats
 #
+calculate_acf <- function(df) {sapply(df, function(column) acf1_pairwise(column))}
 model_stats <- data.frame(name = colnames(daily_data), 
                           first_round = daily_data$roundNumber[apply(daily_data, 2, function(x) which(!is.na(x))[1])],
                           mean = colMeans(daily_data, na.rm = TRUE), 
+                          rho = calculate_acf(daily_data),
                           sd = colSds(daily_data, na.rm = TRUE), 
                           drawdown = apply(daily_data, MARGIN = 2, FUN = function(column) {maxDrawdown(column)}),
                           size = colSums(!is.na(daily_data)),
@@ -72,19 +75,9 @@ ggsave("model-performances.png",scale=1,width=15,height=15)
 
 
 
-## Define your threshold for what is a good model.
+## Define your own threshold for what the minimal quality of a model is, for it to be considered for portfolio building.
 #
-# To guide you, I've calculated what the stake-weighted mean performance is of numer.ai's benchmark models,
-# and what their stake-weighted drawdown is. I put the thresholds a little below that mean and a little above that drawdown.
-#
-# numerai_perf <- left_join(model_df,dplyr::select(model_stats,name,mean,drawdown)) %>% na.omit()
-# sum(numerai_perf$mean * numerai_perf$notes) / sum(numerai_perf$notes) # weighted mean
-benchmark_mean <- 0.00767
-# sum(numerai_perf$drawdown * numerai_perf$notes) / sum(numerai_perf$notes) # weighted drawdown
-benchmark_drawdown <- 0.710
-#
-# Tweak these thresholds as you feel is most appropriate
-good_models <- model_stats %>% dplyr::filter(mean > benchmark_mean * 0.8, drawdown < benchmark_drawdown / 0.8)
+good_models <- model_stats %>% dplyr::filter(mean > 0.005)
 
 
 
@@ -99,7 +92,7 @@ table(starting_points)
 #
 # use threshold to remove small stakes from the portfolios (this limits the
 # final number of models you would have to stake on)
-threshold <- 0.05
+threshold <- 0.1
 #
 combined <- data.frame()
 for (point in starting_points) {
@@ -137,22 +130,43 @@ condensed$stake <- round(condensed$stake)
 #
 kable(combined,digits=3)
 
+# Run 1: from round 339
+#   |name               |weight |stake |mean   |Cov    |CVaR  |VaR    |samplesize |starting_round |
+#   |:------------------|:------|:-----|:------|:------|:-----|:------|:----------|:--------------|
+#   |V42_LGBM_CLAUDIA20 |0.272  |59    |0.0195 |0.0264 |0.026 |0.0221 |291        |339            |
+#   |V42_LGBM_CT_BLEND  |0.116  |25    |       |       |      |       |           |               |
+#   |V42_LGBM_ROWAN20   |0.09   |19    |       |       |      |       |           |               |
+#   |V42_LGBM_TEAGER20  |0.315  |68    |       |       |      |       |           |               |
+#   |V42_LGBM_TEAGER60  |0.095  |20    |       |       |      |       |           |               |
+#   |V4_LGBM_VICTOR20   |0.112  |24    |       |       |      |       |           |               |
+#   |                   |       |      |       |       |      |       |           |               |
 
+# Run 2: from round 339. There is some variation, but not a crazy amount. 
+#   |name               |weight |stake |mean   |Cov    |CVaR   |VaR   |samplesize |starting_round |
+#   |:------------------|:------|:-----|:------|:------|:------|:-----|:----------|:--------------|
+#   |V42_LGBM_CLAUDIA20 |0.249  |54    |0.0197 |0.0266 |0.0262 |0.022 |291        |339            |
+#   |V42_LGBM_CT_BLEND  |0.098  |21    |       |       |       |      |           |               |
+#   |V42_LGBM_ROWAN20   |0.091  |20    |       |       |       |      |           |               |
+#   |V42_LGBM_TEAGER20  |0.369  |80    |       |       |       |      |           |               |
+#   |V42_LGBM_TEAGER60  |0.089  |19    |       |       |       |      |           |               |
+#   |V4_LGBM_VICTOR20   |0.105  |23    |       |       |       |      |           |               |
+#   |                   |       |      |       |       |       |      |           |               |  
+
+# Run 3: from round 370, to see how much effect a shorter time series has. Some more variation, but not bad.
 #   |name               |weight |stake |mean   |Cov    |CVaR   |VaR    |samplesize |starting_round |
 #   |:------------------|:------|:-----|:------|:------|:------|:------|:----------|:--------------|
-#   |V42_EXAMPLE_PREDS  |0.044  |9     |0.0188 |0.0257 |0.0261 |0.0207 |291        |339            |
-#   |V42_LGBM_CLAUDIA20 |0.229  |49    |       |       |       |       |           |               |
-#   |V42_LGBM_CT_BLEND  |0.105  |23    |       |       |       |       |           |               |
-#   |V42_LGBM_ROWAN20   |0.075  |16    |       |       |       |       |           |               |
-#   |V42_LGBM_TEAGER20  |0.308  |66    |       |       |       |       |           |               |
-#   |V42_LGBM_TEAGER60  |0.093  |20    |       |       |       |       |           |               |
-#   |V4_LGBM_VICTOR20   |0.094  |20    |       |       |       |       |           |               |
-#   |V4_LGBM_VICTOR60   |0.053  |11    |       |       |       |       |           |               |
-  
+#   |V42_EXAMPLE_PREDS  |0.067  |14    |0.0205 |0.0288 |0.0275 |0.0219 |260        |370            |
+#   |V42_LGBM_CLAUDIA20 |0.33   |71    |       |       |       |       |           |               |
+#   |V42_LGBM_CT_BLEND  |0.092  |20    |       |       |       |       |           |               |
+#   |V42_LGBM_ROWAN20   |0.083  |18    |       |       |       |       |           |               |
+#   |V42_LGBM_TEAGER20  |0.311  |67    |       |       |       |       |           |               |
+#   |V42_LGBM_TEAGER60  |0.116  |25    |       |       |       |       |           |               |
+#   |                   |       |      |       |       |       |       |           |               |
+
 ## Printout combined portfolio across starting rounds (equal weight for each starting points for now)
-# For Numer.ai's models, all models go back equally far, so there is nothing to merge
+# For Numer.ai's models, all models go (almost) equally far back, so there is nothing to merge
 #
-# kable(condensed,digits=3)
+kable(condensed,digits=3)
 
 
 # This is numer.ai's current stake distribution for models with a samplesize > 100. (nov 2023)
