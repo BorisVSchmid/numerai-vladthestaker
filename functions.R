@@ -1,15 +1,22 @@
 ## Define model performance query
 #
-custom_query <- function(username) {paste0('query{v3UserProfile(modelName: \"',username,'\") {roundModelPerformances {
-                  corr20V2
-                  mmc
-                  roundNumber
-                  roundResolved
+custom_query_modelID <- function(username) {run_query(query = paste0('query{v3UserProfile(modelName: \"',username,'\") {id}}'), auth=FALSE)[[1]]$id}
+
+if (!exists("mem_custom_query_modelID")) {
+  mem_custom_query_modelID <- memoise(custom_query_modelID)
+}
+
+custom_query <- function(userid) {paste0('query{v2RoundModelPerformances(modelId: \"',userid,'\") {
+                roundNumber
+                submissionScores {
+                  date
+                  day
+                  displayName
+                  value
                 }
               }
-            }'
-  )
-}
+            }')}
+
 
 acf1_pairwise <- function(series) {
   if (!is.numeric(series) || length(series) < 2) {
@@ -26,23 +33,27 @@ acf1_pairwise <- function(series) {
 }
 
 
-
 ## Query model performance of all rounds since fromRound until last resolved round + 10 rounds
 # 
 model_performance <- function(modelName, fromRound) {
-  output <- run_query(query = custom_query(tolower(modelName)), auth=FALSE)$v3UserProfile$roundModelPerformances 
   
-  # Start at the predefined fromRound
-  output <- output %>% dplyr::filter(roundNumber >= fromRound)
-
+  output <- run_query(query = custom_query(mem_custom_query_modelID(tolower(modelName))), auth=FALSE)$v2RoundModelPerformances
+  output$nodata <- sapply(output$submissionScores,is.null)
+  output2 <- output %>% dplyr::filter(roundNumber >= fromRound & nodata == FALSE)
+  
+  output3 <- data.frame()
+  for (i in 1:nrow(output2)) {
+    out <- output2[i,2][[1]]
+    out$roundNumber <- output2[i,1]
+    output3 <- rbind(output3,out)
+  }
+  
   # We include rounds that are within 10 rounds of resolving.
-  last_resolved <- max(output %>% dplyr::filter(roundResolved == TRUE) %>% pull(roundNumber))
-  output <- output %>% dplyr::filter(roundNumber <= last_resolved + 10)
+  output <- pivot_wider(output3,names_from=displayName) %>% dplyr::filter(day > 9 & day <= 20) %>% dplyr::select(roundNumber,canon_corr,canon_mmc,bmc)
+  colnames(output) <- c("roundNumber","corr","mmc","bmc")
   
   return(output)
 }
-
-
 
 ## Memoize model performance query.
 #
@@ -54,7 +65,7 @@ if (!exists("mem_model_performance")) {
 
 # Load in the performance data. 
 #
-build_RAW <- function (model_df, MinfromRound = 1, corr_multiplier = 0, mmc_multiplier = 1) {
+build_RAW <- function (model_df, MinfromRound = 1, corr_multiplier = 0.5, mmc_multiplier = 2, bmc_multiplier = 0) {
   
   model_names <- model_df$name
   model_starts <- model_df$start
@@ -67,14 +78,14 @@ build_RAW <- function (model_df, MinfromRound = 1, corr_multiplier = 0, mmc_mult
     print(model_names[i])
     
     temp <- mem_model_performance(model_names[i],max(MinfromRound,model_starts[i]))
-    temp <- dplyr::select(temp,roundNumber,corr20V2,mmc)
-    temp$score <- corr_multiplier * temp$corr20V2 + mmc_multiplier * temp$mmc 
+    temp <- dplyr::select(temp,roundNumber,corr,mmc,bmc)
+    temp$score <- corr_multiplier * temp$corr + mmc_multiplier * temp$mmc + bmc_multiplier * temp$bmc
     temp <- dplyr::select(temp,roundNumber,score)
     temp$name <- model_names[i]
     RAW <- rbind(RAW,temp)    
   }
   
-  data_ts <-  RAW %>% group_by(name,roundNumber) %>% dplyr::ungroup() %>% tidyr::pivot_wider(names_from = name,values_from = score)
+  data_ts <-  unique(RAW) %>% group_by(name,roundNumber) %>% dplyr::ungroup() %>% tidyr::pivot_wider(names_from = name,values_from = score,values_fill = list(value = NA))
   data_ts <- data.frame(dplyr::arrange(data_ts,roundNumber))
   
   return(data_ts)
@@ -177,3 +188,16 @@ build_portfolio <- function(daily,threshold) {
   portfolio$stake <- round(portfolio$weight * NMR)
   return(portfolio)
 }
+
+build_plot <- function(portfolio,starting_point) { # name weights starting round
+  plot_data <- dplyr::select(daily_data,c(roundNumber,portfolio$name))
+  plot_data <- plot_data[complete.cases(plot_data),]
+  weighted_data <- plot_data %>%
+    mutate(across(all_of(portfolio$name), 
+                  ~ . * portfolio$weight[portfolio$name == cur_column()])) %>%
+    select(-roundNumber) %>%
+    rowSums()
+  result <- data.frame(roundNumber = plot_data$roundNumber, cumulative_portfolio_score = cumsum(weighted_data), starting_round = starting_point)  
+  
+  return(result)
+} 

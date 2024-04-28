@@ -1,3 +1,9 @@
+### 2024-04-28: V3.0.0
+
+* Added a cumulative visualisation of the starting points that works pretty well.
+* The benchmark models are now only plotted from the moment they are staked.
+* Tweaked the dot size when visualizing tSSR
+
 ### 2023-12-28: V2.0.4 [BUGFIX].
 
 I was taking the Acf1 of the mean of the list of models you have, and it should have been the Acf1 of the time series of the individual models. Fixed now. Also replaced the Acf1 from R for a custom one, which ignores any pairs of sequential numbers where either one is NA. Standard Acf in R does weird things.
