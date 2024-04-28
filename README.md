@@ -42,7 +42,7 @@ Vlad downloads the end-of-round performances of your models and combines them to
 
 First, you will get an image that shows to you how your models perform in terms of mean _\_0.5xCORR+2xMMC_ and std _\_0.5xCORR+2xMMC_, as well as the associated max drawdown (redder dots have larger drawdowns) and autocorrelation- and samplesize-corrected sharpe (bigger dots have higher tSSR).
 
-[MMC mean and std of the models](model-performances-05corr-2mmc.png "Model performances on correlation")
+![model-performances-05corr-2mmc](https://github.com/BorisVSchmid/numerai-vladthestaker/assets/25182535/4769621f-1dd1-4bb1-868b-e1f86ae9cef4)
 
 Second, your models will get grouped based on how complete their time series is. Did you add a bunch of models two months ago? then two months ago is another 'starting point' for considering which models to stake on. Splitting the time series of all your models by starting points ensures that Vlad isn't disregarding the information of your older models, just because your new models don't go back that far in time.
 
@@ -92,7 +92,7 @@ _Conditional Value-at-Risk (CVaR)_, also known as Expected Shortfall (ES): CVaR 
 
 Finally, to help you make a decision on the tradeoff between sample size and performance, you get a cumulative performance plot that shows how the different ensembled perform.
 
-[MMC mean and std of the models](portfolio-performances-05corr-2mmc.png "Portfolio performances on correlation")
+![portfolio-performances-05corr-2mmc](https://github.com/BorisVSchmid/numerai-vladthestaker/assets/25182535/b26e5858-c955-4ad6-8da2-2c39c70a242e)
 
 ## Disclaimer (copied from numerai-portfolio-opt, thanks!)
 - The information and code provided in this GitHub repository are for educational and entertainment purposes only. Any information in this repository is not intended to be used as financial advice, and the owner, contributor of this repository are not financial advisors.
