@@ -1,23 +1,8 @@
-## Define model performance query
+
+
 #
-custom_query_modelID <- function(username) {run_query(query = paste0('query{v3UserProfile(modelName: \"',username,'\") {id}}'), auth=FALSE)[[1]]$id}
-
-if (!exists("mem_custom_query_modelID")) {
-  mem_custom_query_modelID <- memoise(custom_query_modelID)
-}
-
-custom_query <- function(userid) {paste0('query{v2RoundModelPerformances(modelId: \"',userid,'\") {
-                roundNumber
-                submissionScores {
-                  date
-                  day
-                  displayName
-                  value
-                }
-              }
-            }')}
-
-
+# Statistics function.
+#
 acf1_pairwise <- function(series) {
   if (!is.numeric(series) || length(series) < 2) {
     stop("Series must be a numeric vector with at least two elements.")
@@ -31,66 +16,6 @@ acf1_pairwise <- function(series) {
   
   return(acf1_value)
 }
-
-
-## Query model performance of all rounds since fromRound until last resolved round + 10 rounds
-# 
-model_performance <- function(modelName, fromRound) {
-  
-  output <- run_query(query = custom_query(mem_custom_query_modelID(tolower(modelName))), auth=FALSE)$v2RoundModelPerformances
-  output$nodata <- sapply(output$submissionScores,is.null)
-  output2 <- output %>% dplyr::filter(roundNumber >= fromRound & nodata == FALSE)
-  
-  output3 <- data.frame()
-  for (i in 1:nrow(output2)) {
-    out <- output2[i,2][[1]]
-    out$roundNumber <- output2[i,1]
-    output3 <- rbind(output3,out)
-  }
-  
-  # We include rounds that are within 10 rounds of resolving.
-  output <- pivot_wider(output3,names_from=displayName) %>% dplyr::filter(day > 9 & day <= 20) %>% dplyr::select(roundNumber,canon_corr,canon_mmc,bmc)
-  colnames(output) <- c("roundNumber","corr","mmc","bmc")
-  
-  return(output)
-}
-
-## Memoize model performance query.
-#
-if (!exists("mem_model_performance")) {
-  mem_model_performance <- memoise(model_performance)
-}
-
-
-
-# Load in the performance data. 
-#
-build_RAW <- function (model_df, MinfromRound = 1, corr_multiplier = 0.5, mmc_multiplier = 2, bmc_multiplier = 0) {
-  
-  model_names <- model_df$name
-  model_starts <- model_df$start
-
-  RAW <- data.frame()
-  for (i in 1:length(model_names)) {
-    
-    # Don't spam the API.
-    Sys.sleep(0.2)
-    print(model_names[i])
-    
-    temp <- mem_model_performance(model_names[i],max(MinfromRound,model_starts[i]))
-    temp <- dplyr::select(temp,roundNumber,corr,mmc,bmc)
-    temp$score <- corr_multiplier * temp$corr + mmc_multiplier * temp$mmc + bmc_multiplier * temp$bmc
-    temp <- dplyr::select(temp,roundNumber,score)
-    temp$name <- model_names[i]
-    RAW <- rbind(RAW,temp)    
-  }
-  
-  data_ts <-  unique(RAW) %>% group_by(name,roundNumber) %>% dplyr::ungroup() %>% tidyr::pivot_wider(names_from = name,values_from = score,values_fill = list(value = NA))
-  data_ts <- data.frame(dplyr::arrange(data_ts,roundNumber))
-  
-  return(data_ts)
-}
-
 
 
 ## Cumulative Plotting function.
