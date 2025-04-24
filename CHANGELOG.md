@@ -1,3 +1,8 @@
+### 2025-04-24: V4.0.0
+
+* Split up collecting the data and running the optimizer in two. This way, you only hit the API once, until you decide to refresh the data
+
+
 ### 2024-04-28: V3.0.0
 
 * Added a cumulative visualisation of the starting points that works pretty well.

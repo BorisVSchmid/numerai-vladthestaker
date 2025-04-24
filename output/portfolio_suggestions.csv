@@ -1,0 +1,20 @@
+name                 weight   stake   mean     Cov      CVaR     VaR      samplesize   starting_round 
+-------------------  -------  ------  -------  -------  -------  -------  -----------  ---------------
+NB_FEAT_NEUTRAL      0.104    104     0.0078   0.0137   0.013    0.009    135          843            
+NB_HELLO_NUMERAI     0.233    233                                                                     
+NB_TARGET_ENSEMBLE   0.09     90                                                                      
+V5_LGBM_CT_BLEND     0.282    282                                                                     
+V5_LGBM_CYRUSD       0.29     290                                                                     
+                                                                                                      
+INTEGRATION_TEST     0.369    369     0.0051   0.0086   0.0114   0.0081   98           880            
+NB_HELLO_NUMERAI     0.156    156                                                                     
+V5_LGBM_CT_BLEND     0.334    334                                                                     
+V5_LGBM_CYRUSD       0.14     140                                                                     
+                                                                                                      
+INTEGRATION_TEST     0.051    51      0.0031   0.0088   0.0132   0.0116   58           920            
+NB_HELLO_NUMERAI     0.102    102                                                                     
+NB_TARGET_ENSEMBLE   0.089    89                                                                      
+V5_EXAMPLE_PREDS     0.327    327                                                                     
+V5_LGBM_CT_BLEND     0.331    331                                                                     
+V5_LGBM_CYRUSD       0.101    101                                                                     
+                                                                                                      
