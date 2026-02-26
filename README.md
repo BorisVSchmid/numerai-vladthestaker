@@ -1,7 +1,7 @@
 # vladthestaker
 
 For changelog, see `CHANGELOG.md`.
-For a Python alternative, see [numerai-portfolio-opt](https://github.com/eses-wk/numerai-portfolio-opt).
+For a Python alternative, see [numerai-portfolio-opt](https://github.com/eses-wk/numerai-portfolio-opt), although it has fallen behind in maintenance.
 
 ## Warnings
 
@@ -20,7 +20,7 @@ Current workflow is a 3-step pipeline:
 2. Sweep train/validation grid cells across different start offsets and training-window sizes that are used to build an average between a minvariance and tangency portfolio.
 3. Build three averaged portfolios (`return_p90`, `maxdd_p10`, `overlap`) and compare forward OOS behavior.
 
-Current default staking pick is `overlap` from `output/step3-3xportfolio-weights.csv`.
+Current default staking pick is to pick the `overlap` models, based on the overlap between top return and top (minimal) maxdrawdown portfolios from `output/step3-3xportfolio-weights.csv`.
 
 ## How to use
 
@@ -57,43 +57,28 @@ In practice, use `overlap` when you want a balanced default between return focus
 
 ## How does the output look?
 
-First, inspect model performance diagnostics from Step2:
+First, inspect model performance diagnostics from Step2. Shown here is the absolute performance for the models, but some models (like the 5.2 benchmark models) will have a shorter history. Depending on your model histories, use both the absolute and relative model comparison plots (see [`output/model-performances-rel-corr-mmc.png`](output/model-performances-rel-corr-mmc.png)) to make decisions on which models to include in future iterations of your `Optimize-Me.xlsx` file. Note that relative model comparison is still not a strictly fair comparison: the relative score of a model is its average relative score, and if a more recent batch of models were only evaluated during an _"easy"_ period in the Numer.ai tournament, they will unfairly stand out as top models.
 
 ![model-performances-abs-corr-mmc](output/model-performances-abs-corr-mmc.png)
 
-Use this absolute-performance plot as the primary diagnostic.  
-If you want stricter universe control before optimization, use `output/model-performances-rel-corr-mmc.png` to pre-filter models before editing `Optimize-Me.xlsx`.
 
-Snapshot of current Step1 coverage (`output/daily_data_corr_abs.csv`):
-
-```text
-rows=355 cols=33 rounds=843-1197
-```
-
-Second, inspect the Step2 sweep heatmap:
+Second, inspect the Step2 sweep heatmap. The top performing combination of offset from the first round + portfolio training window length is marked with a filled square. The top 10% (highest top 10% for return, lowest top 10% for max drawdown) are marked with black squares around the parameter combinations. Our source of robustness in this iteration of Vlad the Staker (v5.0) comes from creating an average portfolio from this 10% of parameter combinations, rather than from resampling from previous rounds (as we did in v4.0 and before).
 
 ![step2-grid-window-sweep-oos-heatmap](output/step2-grid-window-sweep-oos-heatmap.png)
-
-Snapshot of current Step2 grid summary (`output/step2-grid-window-sweep.csv`):
-
-```text
-total_cells=2304 valid_cells=1128
-return_q90=0.0105 maxdd_q10=0.1916
-```
 
 Then inspect Step3 portfolio weights and metrics (`output/step3-3xportfolio-weights.csv`).
 
 Current `overlap` summary row:
 
 ```text
-n_selected_cells=64
-n_oos_rounds=60
-oos_return=0.006919844
-oos_CVaR=-0.02265425
-oos_maxdd=0.1286154
+n_selected_cells=64        # portfolio parameters, shared between the return and maxdrawdown top 10% portfolios
+n_oos_rounds=60            # 60 OOS validation rounds to compare the models on.
+oos_return=0.006919844     # return per round,
+oos_CVaR=-0.02265425       # CVaR (a description of risk. Lower is better)
+oos_maxdd=0.1286154        # Max drawdown (a description of risk. Lower is better).
 ```
 
-Current top `overlap` models by weight:
+Current suggested metamodel based on the `overlap` portfolio:
 
 ```text
 SHATTEREDX           0.23818283
@@ -102,6 +87,16 @@ NB_TARGET_ENSEMBLE   0.11080958
 JOS_STACK            0.10542928
 FEARINDEX            0.09935092
 NB_FEAT_NEUTRAL      0.06507597
+REPUTATION           0.05751641
+VIDEIGREN            0.05644039
+V51_LGBM_TEAGER60    0.02128464
+V51_LGBM_TEAGER20    0.01951700
+V5_LGBM_TEAGER2B     0.01841735
+SSH48                0.01609449
+WITCHYAI             0.00772738
+NB_EXAMPLE_MODEL     0.00452501
+MELONADA             0.00350762
+V5_LGBM_CYRUSD       0.00008032
 ```
 
 For our example models, we used Numer.ai's benchmark models, and the highest-staked model of the 10 masters and grandmasters of the 2025 season.
@@ -117,41 +112,6 @@ Use this figure to compare the stability and trajectory of `return_p90`, `maxdd_
 ## Tunable parameters
 
 All tunable settings are read from `Optimize-Me.xlsx` sheet `Parameters`. Scripts fail fast if required keys are missing or invalid.
-
-Step1 keys:
-
-- `base_round`
-
-Step2 keys:
-
-- `base_round`
-- `corr_multiplier`
-- `mmc_multiplier`
-- `min_roundwindow_size`
-- `max_roundwindow_size`
-- `min_validation_rounds`
-- `min_models_submitting_per_round`
-- `offset_step`
-- `roundwindow_step`
-- `model_names_to_exclude`
-
-Step3 keys:
-
-- `base_round`
-- `corr_multiplier`
-- `mmc_multiplier`
-- `model_names_to_exclude`
-- `min_models_submitting_per_round`
-- `step2_grid_path`
-- `corr_abs_path`
-- `mmc_abs_path`
-- `weights_out`
-- `returns_plot_out`
-
-Runtime verbosity controls:
-
-- `VLAD_QUIET_STARTUP` (default `1`)
-- `VLAD_VERBOSE` (default `0`)
 
 Environment:
 
