@@ -1,5 +1,16 @@
 ## Define model performance query
 #
+is_vlad_verbose <- function() {
+  verbose_flag <- tolower(Sys.getenv("VLAD_VERBOSE", "0"))
+  verbose_flag %in% c("1", "true", "yes", "y")
+}
+
+vlad_log <- function(...) {
+  if (is_vlad_verbose()) {
+    message(...)
+  }
+}
+
 run_query <- function(query) {
   # Construct the request
   req <- request("https://api-tournament.numer.ai/") %>%
@@ -51,6 +62,7 @@ custom_query <- function(userid, lastNRounds) {
                     day
                     displayName
                     value
+                    percentile
                   }
                 }
               }')
@@ -59,11 +71,31 @@ custom_query <- function(userid, lastNRounds) {
 
 
 model_performance <- function(modelName, fromRound, currentRound) {
+  empty_result <- data.frame(
+    roundNumber = integer(),
+    corr_abs = numeric(),
+    corr_rel = numeric(),
+    mmc_abs = numeric(),
+    mmc_rel = numeric()
+  )
+
   # Don't rate-limit the API
   Sys.sleep(1)
   #
-  lastNRounds <- currentRound - fromRound
-  print(paste0("Fetching data from ", fromRound, " to ", currentRound, ", aka ", lastNRounds, " rounds."))
+  lastNRounds <- currentRound - fromRound + 1
+  vlad_log(
+    "Fetching data from ",
+    fromRound,
+    " to ",
+    currentRound,
+    ", aka ",
+    lastNRounds,
+    " rounds."
+  )
+  if (lastNRounds <= 0) {
+    message(paste("No rounds to fetch for", modelName, "from", fromRound, "to", currentRound))
+    return(empty_result)
+  }
   n_tries <- 3
   retry_delay <- 10 # Seconds
   
@@ -75,39 +107,136 @@ model_performance <- function(modelName, fromRound, currentRound) {
       # Check if output is empty
       if (length(raw_output) == 0) {
         message(paste("No data found for", modelName))
-        return(data.frame(roundNumber = integer(), corr = numeric(), mmc = numeric(), bmc = numeric()))
+        return(empty_result)
       }
       
       # Process the output safely
       processed_data <- lapply(raw_output, function(round) {
-        if (is.null(round$submissionScores)) {
+        if (is.null(round$submissionScores) || length(round$submissionScores) == 0) {
           return(NULL)  # Skip rounds with no data
         }
         
         # Flatten submissionScores for this round
         scores <- round$submissionScores
-        round_df <- do.call(rbind, lapply(scores, function(score) {
+        round_rows <- lapply(scores, function(score) {
+          if (is.null(score)) {
+            return(NULL)
+          }
+          display_name <- if (is.null(score$displayName) || length(score$displayName) == 0) {
+            NA_character_
+          } else {
+            as.character(score$displayName[[1]])
+          }
+          score_value <- if (is.null(score$value) || length(score$value) == 0) {
+            NA_real_
+          } else {
+            as.numeric(score$value[[1]])
+          }
+          score_percentile <- if (is.null(score$percentile) || length(score$percentile) == 0) {
+            NA_real_
+          } else {
+            as.numeric(score$percentile[[1]])
+          }
+          score_day <- if (is.null(score$day) || length(score$day) == 0) {
+            NA_integer_
+          } else {
+            as.integer(score$day[[1]])
+          }
           data.frame(
             roundNumber = round$roundNumber,
-            displayName = score$displayName,
-            value = score$value,
-            day = score$day,
+            displayName = display_name,
+            value = score_value,
+            percentile = score_percentile,
+            day = score_day,
             stringsAsFactors = FALSE
           )
-        }))
+        })
+        round_rows <- round_rows[!sapply(round_rows, is.null)]
+        if (length(round_rows) == 0) {
+          return(NULL)
+        }
+        round_df <- do.call(rbind, round_rows)
         return(round_df)
       })
       
+      processed_data <- processed_data[!sapply(processed_data, is.null)]
+      if (length(processed_data) == 0) {
+        message(paste("No data found for", modelName))
+        return(empty_result)
+      }
+
       # Combine all processed data into a single data frame
       combined_data <- do.call(rbind, processed_data)
+
+      if (nrow(combined_data) == 0) {
+        message(paste("No data found for", modelName))
+        return(empty_result)
+      }
       
-      # Filter and pivot as needed
-      filtered_data <- combined_data %>%
-        dplyr::filter(day > 10 & day <= 20) %>%
-        tidyr::pivot_wider(names_from = displayName, values_from = value) %>%
-        dplyr::select(roundNumber, canon_corr, canon_mmc, canon_bmc)
-      
-      colnames(filtered_data) <- c("roundNumber", "corr", "mmc", "bmc")
+      # Filter and pivot as needed. Keep the latest available day per round/target.
+      latest_scores <- combined_data %>%
+        dplyr::filter(roundNumber >= fromRound, roundNumber <= currentRound) %>%
+        dplyr::filter(!is.na(day), day > 10 & day <= 20) %>%
+        dplyr::group_by(roundNumber, displayName) %>%
+        dplyr::slice_max(order_by = day, n = 1, with_ties = FALSE) %>%
+        dplyr::ungroup() %>%
+        dplyr::select(roundNumber, displayName, value, percentile)
+
+      if (nrow(latest_scores) == 0) {
+        message(paste("No data found for", modelName))
+        return(empty_result)
+      }
+
+      value_data <- latest_scores %>%
+        dplyr::select(roundNumber, displayName, value) %>%
+        dplyr::group_by(roundNumber, displayName) %>%
+        dplyr::summarise(value = dplyr::last(value), .groups = "drop") %>%
+        tidyr::pivot_wider(
+          names_from = displayName,
+          values_from = value,
+          values_fill = list(value = NA_real_)
+        )
+
+      percentile_data <- latest_scores %>%
+        dplyr::select(roundNumber, displayName, percentile) %>%
+        dplyr::group_by(roundNumber, displayName) %>%
+        dplyr::summarise(percentile = dplyr::last(percentile), .groups = "drop") %>%
+        tidyr::pivot_wider(
+          names_from = displayName,
+          values_from = percentile,
+          values_fill = list(percentile = NA_real_)
+        )
+
+      ensure_metric_columns <- function(df) {
+        required_columns <- c("canon_corr", "canon_mmc")
+        for (metric_column in required_columns) {
+          if (!metric_column %in% names(df)) {
+            df[[metric_column]] <- NA_real_
+          }
+        }
+        df
+      }
+
+      value_data <- ensure_metric_columns(value_data)
+      percentile_data <- ensure_metric_columns(percentile_data)
+
+      if (anyDuplicated(value_data$roundNumber) > 0 || anyDuplicated(percentile_data$roundNumber) > 0) {
+        stop("Duplicate roundNumber rows found after widening value/percentile data.")
+      }
+
+      filtered_data <- dplyr::full_join(
+        value_data %>% dplyr::select(roundNumber, canon_corr, canon_mmc),
+        percentile_data %>% dplyr::select(roundNumber, canon_corr, canon_mmc),
+        by = "roundNumber",
+        suffix = c("_abs", "_rel")
+      ) %>%
+        dplyr::arrange(roundNumber) %>%
+        dplyr::rename(
+          corr_abs = canon_corr_abs,
+          corr_rel = canon_corr_rel,
+          mmc_abs = canon_mmc_abs,
+          mmc_rel = canon_mmc_rel
+        )
       
       return(filtered_data)
     }, error = function(e) {
@@ -140,16 +269,33 @@ replace_numeric0_with_na <- function(x) {
 
 # Load in the performance data. 
 #
-build_RAW <- function (model_df, MinfromRound = 1, currentRound, corr_multiplier = 0.5, mmc_multiplier = 2, bmc_multiplier = 0) {
+build_RAW <- function (model_df, MinfromRound = 1, currentRound) {
   
   model_names <- model_df$name
   model_starts <- model_df$start
-  
-  RAW <- data.frame()
-  for (i in 1:length(model_names)) {
+
+  metric_names <- c("corr_abs", "corr_rel", "mmc_abs", "mmc_rel")
+  raw_tables <- lapply(metric_names, function(metric_name) {
+    data.frame(roundNumber = integer(), name = character(), score = numeric(), stringsAsFactors = FALSE)
+  })
+  names(raw_tables) <- metric_names
+
+  progress_bar <- NULL
+  if (length(model_names) > 0) {
+    progress_bar <- utils::txtProgressBar(min = 0, max = length(model_names), style = 3)
+    on.exit({
+      close(progress_bar)
+      cat("\n")
+    }, add = TRUE)
+  }
+
+  for (i in seq_along(model_names)) {
     # Don't spam the API.
     Sys.sleep(0.2)
-    print(model_names[i])
+    if (!is.null(progress_bar)) {
+      utils::setTxtProgressBar(progress_bar, i)
+    }
+    vlad_log("Fetching model ", model_names[i], " (", i, "/", length(model_names), ").")
     
     temp <- model_performance(model_names[i], max(MinfromRound, model_starts[i]), currentRound)
     
@@ -158,33 +304,40 @@ build_RAW <- function (model_df, MinfromRound = 1, currentRound, corr_multiplier
       message(paste("No data found for model", model_names[i], "from round", MinfromRound, "to", currentRound))
       next  # Skip to the next iteration if no data is found
     }
-    
-    temp <- dplyr::select(temp, roundNumber, corr, mmc, bmc)
-    
-    # Calculate score
-    if (mmc_multiplier == 0 & bmc_multiplier == 0) {
-      temp$score <- corr_multiplier * temp$corr
-    } else {
-      temp$score <- corr_multiplier * temp$corr + mmc_multiplier * temp$mmc + bmc_multiplier * temp$bmc
+
+    for (metric_name in metric_names) {
+      temp_metric <- data.frame(
+        roundNumber = temp$roundNumber,
+        name = model_names[i],
+        score = temp[[metric_name]],
+        stringsAsFactors = FALSE
+      )
+      raw_tables[[metric_name]] <- rbind(raw_tables[[metric_name]], temp_metric)
     }
-    temp <- dplyr::select(temp, roundNumber, score)
-    temp$name <- model_names[i]
-    RAW <- rbind(RAW, temp)    
   }
-  
-  if (nrow(RAW) == 0) {
-    stop("No data retrieved for any model. Please check your inputs.")
+
+  build_metric_table <- function(raw_metric, metric_name) {
+    metric_table <- raw_metric %>%
+      na.omit() %>%
+      dplyr::distinct(roundNumber, name, score) %>%
+      tidyr::pivot_wider(
+        names_from = name,
+        values_from = score,
+        values_fill = NA_real_
+      ) %>%
+      dplyr::arrange(roundNumber)
+
+    if (nrow(metric_table) == 0) {
+      stop("No data retrieved for metric `", metric_name, "`. Please check your inputs.")
+    }
+
+    data.frame(metric_table)
   }
-  
-  data_ts1 <- unique(RAW) %>%
-    group_by(name, roundNumber) %>%
-    ungroup()
-  data_ts <- data_ts1 %>% na.omit() %>%
-    tidyr::pivot_wider(names_from = name, values_from = score, values_fill = list(value = NA))
-  
-  data_ts <- data.frame(dplyr::arrange(data_ts, roundNumber))
-  data_ts <- data_ts %>% mutate(across(everything(), remove_na))
-  data_ts <- data_ts %>% mutate_all(~ sapply(., replace_numeric0_with_na))
-  
+
+  data_ts <- lapply(metric_names, function(metric_name) {
+    build_metric_table(raw_tables[[metric_name]], metric_name)
+  })
+  names(data_ts) <- metric_names
+
   return(data_ts)
 }

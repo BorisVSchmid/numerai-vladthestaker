@@ -17,6 +17,24 @@ acf1_pairwise <- function(series) {
   return(acf1_value)
 }
 
+# Evaluate an expression while suppressing stdout/stderr messages from solver internals.
+quiet_eval <- function(expr) {
+  expr_sub <- substitute(expr)
+  result <- NULL
+  suppressWarnings(
+    suppressMessages(
+      utils::capture.output(
+        utils::capture.output(
+          result <- eval(expr_sub, envir = parent.frame()),
+          type = "message"
+        ),
+        type = "output"
+      )
+    )
+  )
+  result
+}
+
 
 ## Cumulative Plotting function.
 # 
@@ -34,12 +52,14 @@ cumulative_plot <- function(model_df,starting_era,good_models_all,daily,type) {
 tangency_portfolio <- function(daily_data) {
   data <- daily_data
   dates <- seq.Date(from = as.Date("1900-01-01"), by = "day", length.out = dim(data)[1])
-  spec <- portfolioSpec()
-  setType(spec) <- "CVAR"
-  setSolver(spec) <- "solveRglpk.CVAR"
-  TS <- timeSeries(data,dates)
-  colnames(TS) <- colnames(data)
-  optimized <- tangencyPortfolio(TS, spec = spec, constraints = "LongOnly")
+  optimized <- quiet_eval({
+    spec <- portfolioSpec()
+    setType(spec) <- "CVAR"
+    setSolver(spec) <- "solveRglpk.CVAR"
+    TS <- timeSeries(data,dates)
+    colnames(TS) <- colnames(data)
+    tangencyPortfolio(TS, spec = spec, constraints = "LongOnly")
+  })
   return(optimized)
 }
 
@@ -48,17 +68,16 @@ tangency_portfolio <- function(daily_data) {
 minvariance_portfolio <- function(daily_data) {
   data <- daily_data
   dates <- seq.Date(from = as.Date("1900-01-01"), by = "day", length.out = dim(data)[1])
-  spec <- portfolioSpec()
-  setType(spec) <- "CVAR"
-  setSolver(spec) <- "solveRglpk.CVAR"
-  TS <- timeSeries(data,dates)
-  colnames(TS) <- colnames(data)
-  optimized <- minvariancePortfolio(TS, spec = spec, constraints = "LongOnly")
+  optimized <- quiet_eval({
+    spec <- portfolioSpec()
+    setType(spec) <- "CVAR"
+    setSolver(spec) <- "solveRglpk.CVAR"
+    TS <- timeSeries(data,dates)
+    colnames(TS) <- colnames(data)
+    minvariancePortfolio(TS, spec = spec, constraints = "LongOnly")
+  })
   return(optimized)
 }
-
-
-
 
 ## Clean up the returned portfolio into something we can add to a dataframe.
 #
@@ -72,45 +91,83 @@ cleanup_portfolio <- function(portfolio) {
 
 ## Calculate returns
 #
-virtual_returns <- function(daily,portfolio) {
-  
-  daily <- dplyr::select(daily,portfolio$name) %>% na.omit()
-  dates <- seq.Date(from = as.Date("1900-01-01"), by = "day", length.out = dim(daily)[1])
-  
-  ewSpec <- portfolioSpec()
-  setType(ewSpec) <- "CVAR"
-  setSolver(ewSpec) <- "solveRglpk.CVAR"
+virtual_returns <- function(daily, portfolio, prefix = "") {
 
-  setWeights(ewSpec) <- portfolio$weight
-  port <- feasiblePortfolio(timeSeries(daily, dates), spec = ewSpec, constraints = "LongOnly")
-  output <- c(round(fPortfolio::getTargetReturn(port)[1],4),
-           round(fPortfolio::getTargetRisk(port)[1],4),
-           round(fPortfolio::getTargetRisk(port)[3],4),
-           round(fPortfolio::getTargetRisk(port)[4],4),
-           samplesize = dim(daily)[1])
-  return(t(output))
+  daily <- dplyr::select(daily, portfolio$name) %>% na.omit()
+
+  if (nrow(daily) < 2) {
+    output <- data.frame(mean = NA, Cov = NA, CVaR = NA, VaR = NA, MaxDD = NA, n = 0)
+    if (prefix != "") names(output) <- paste0(prefix, "_", names(output))
+    return(output)
+  }
+
+  weighted_returns <- as.numeric(as.matrix(daily) %*% matrix(portfolio$weight, ncol = 1))
+  max_dd <- tryCatch(
+    round(as.numeric(PerformanceAnalytics::maxDrawdown(weighted_returns)), 4),
+    error = function(e) NA_real_
+  )
+
+  dates <- seq.Date(from = as.Date("1900-01-01"), by = "day", length.out = dim(daily)[1])
+
+  port <- quiet_eval({
+    ewSpec <- portfolioSpec()
+    setType(ewSpec) <- "CVAR"
+    setSolver(ewSpec) <- "solveRglpk.CVAR"
+    setWeights(ewSpec) <- portfolio$weight
+    feasiblePortfolio(timeSeries(daily, dates), spec = ewSpec, constraints = "LongOnly")
+  })
+  output <- data.frame(mean = round(fPortfolio::getTargetReturn(port)[1], 4),
+                       Cov = round(fPortfolio::getTargetRisk(port)[1], 4),
+                       CVaR = round(fPortfolio::getTargetRisk(port)[3], 4),
+                       VaR = round(fPortfolio::getTargetRisk(port)[4], 4),
+                       MaxDD = max_dd,
+                       n = dim(daily)[1])
+  if (prefix != "") names(output) <- paste0(prefix, "_", names(output))
+  return(output)
 }
 
 
 # Build portfolios.
 #
-build_portfolio <- function(daily,threshold) {
+build_portfolio <- function(daily,threshold, max_single_model_weight = 0.35) {
+  if (ncol(daily) == 0) {
+    stop("No models available to build a portfolio.")
+  }
 
-  portfolio1 <- tangency_portfolio(daily[sample(nrow(daily),replace = TRUE),]) %>% cleanup_portfolio()
-  portfolio2 <- minvariance_portfolio(daily[sample(nrow(daily),replace = TRUE),]) %>% cleanup_portfolio()
-  for (i in 1:39) {
-    portfolio1 <- rbind(portfolio1,tangency_portfolio(daily[sample(nrow(daily),replace = TRUE),]) %>% cleanup_portfolio())
-    portfolio2 <- rbind(portfolio2,minvariance_portfolio(daily[sample(nrow(daily),replace = TRUE),]) %>% cleanup_portfolio())
-  } 
-  portfolio <- rbind(portfolio1,portfolio2) %>% group_by(name) %>% summarise(weight = mean(weight))
-  
-  # rebalance to remove small weights
-  portfolio <- portfolio[portfolio$weight > threshold,]
-  portfolio$weight <- round(portfolio$weight * 1/sum(portfolio$weight),3)
-  #
-  # Calculating stakesize for different multipliers
-  #
-  portfolio$stake <- round(portfolio$weight * NMR)
+  if (ncol(daily) == 1) {
+    portfolio <- data.frame(name = colnames(daily), weight = 1)
+    return(portfolio)
+  }
+
+  tangency_weights <- tangency_portfolio(daily) %>%
+    cleanup_portfolio() %>%
+    dplyr::rename(weight_tangency = weight)
+
+  minvariance_weights <- minvariance_portfolio(daily) %>%
+    cleanup_portfolio() %>%
+    dplyr::rename(weight_minvariance = weight)
+
+  portfolio <- dplyr::full_join(
+    tangency_weights,
+    minvariance_weights,
+    by = "name"
+  ) %>%
+    dplyr::mutate(
+      weight_tangency = tidyr::replace_na(weight_tangency, 0),
+      weight_minvariance = tidyr::replace_na(weight_minvariance, 0),
+      weight = (weight_tangency + weight_minvariance) / 2
+    ) %>%
+    dplyr::select(name, weight)
+
+  weight_sum <- sum(portfolio$weight, na.rm = TRUE)
+  if (!is.finite(weight_sum) || weight_sum <= 0) {
+    stop("Deterministic tangency/minvariance averaging produced invalid weights.")
+  }
+
+  portfolio <- portfolio %>%
+    dplyr::mutate(weight = weight / weight_sum) %>%
+    dplyr::arrange(dplyr::desc(weight))
+
   return(portfolio)
 }
 
@@ -120,7 +177,7 @@ build_plot <- function(portfolio,starting_point) { # name weights starting round
   weighted_data <- plot_data %>%
     mutate(across(all_of(portfolio$name), 
                   ~ . * portfolio$weight[portfolio$name == cur_column()])) %>%
-    select(-roundNumber) %>%
+    dplyr::select(-roundNumber) %>%
     rowSums()
   result <- data.frame(roundNumber = plot_data$roundNumber, cumulative_portfolio_score = cumsum(weighted_data), starting_round = starting_point)  
   
