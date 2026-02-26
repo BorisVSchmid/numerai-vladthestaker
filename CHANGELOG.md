@@ -1,4 +1,13 @@
+### 2026-02-26: V5.0.0
 
+This release is a major workflow refresh for Vlad the Staker. The main changes are splitting the data into In Sample data used for portfolio construction, and Out Of Sample data used for validation. We also take a new approach in robustness: rather than using resampling of rounds to generate a sense of robustness, we built portfolios across different starting rounds and training-window sizes, with a clearer forward-OOS evaluation flow.
+
+Operationally, the project is now organized as a three-step pipeline with dedicated runners and centralized workbook-driven parameters. This makes reruns more predictable and reduces manual script editing if you want to change some of the parameters.
+
+* Replaced legacy scripts with `step1_get_data.R`, `step2_sweep_grid_windows.R`, `step3_build_3xportfolios_oos.R`, plus `run_pipeline.sh` and `run_pipeline.bat`.
+* Migrated input/config to `Optimize-Me.xlsx` and added centralized parameter loading/validation via `functions-config.R`.
+* Replaced legacy outputs (`output/daily_data.csv`, old suggestion/plot files) with the current Step1/Step2/Step3 CSV and plot contracts.
+* Updated README image links to local `output/*.png` paths.
 
 ### 2025-04-24: V4.0.0
 

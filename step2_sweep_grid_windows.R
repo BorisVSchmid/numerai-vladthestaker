@@ -112,8 +112,8 @@ build_highlight_tiles <- function(df, metric_col, higher_is_better = TRUE, perce
   top_tile <- valid_df[top_idx, , drop = FALSE]
 
   list(
-    top_tile = top_tile %>% dplyr::distinct(round_offset_from_r843, roundwindow_size),
-    p90_tiles = p90_tiles %>% dplyr::distinct(round_offset_from_r843, roundwindow_size)
+    top_tile = top_tile %>% dplyr::distinct(round_offset_from_base_round, roundwindow_size),
+    p90_tiles = p90_tiles %>% dplyr::distinct(round_offset_from_base_round, roundwindow_size)
   )
 }
 
@@ -341,7 +341,7 @@ for (offset_value in offsets) {
     # Default row skeleton; status + metrics updated below.
     row_out <- data.frame(
       base_round = as.integer(base_round),
-      round_offset_from_r843 = as.integer(offset_value),
+      round_offset_from_base_round = as.integer(offset_value),
       roundwindow_size = as.integer(window_size),
       train_start_round = as.integer(train_start_round),
       train_end_round = NA_integer_,
@@ -527,9 +527,10 @@ write.csv(grid_results, grid_csv_out, row.names = FALSE)
 
 heatmap_data <- grid_results %>%
   dplyr::mutate(
-    round_offset_from_r843 = as.integer(round_offset_from_r843),
+    round_offset_from_base_round = as.integer(round_offset_from_base_round),
     roundwindow_size = as.integer(roundwindow_size)
   )
+offset_axis_label <- paste0("round offset from base_round (r", base_round, ")")
 
 if (!any(is.finite(heatmap_data$mean_forward_oos_return))) {
   heatmap_plot <- build_placeholder_plot(
@@ -577,7 +578,7 @@ if (!any(is.finite(heatmap_data$mean_forward_oos_return))) {
   heatmap_plot <- ggplot(
     heatmap_data,
     aes(
-      x = round_offset_from_r843,
+      x = round_offset_from_base_round,
       y = roundwindow_size,
       fill = mean_forward_oos_return
     )
@@ -585,7 +586,7 @@ if (!any(is.finite(heatmap_data$mean_forward_oos_return))) {
     geom_tile(color = "grey92", linewidth = 0.2) +
     labs(
       title = "Step2 Grid Sweep: Forward OOS Mean Return",
-      x = "round offset from r843",
+      x = offset_axis_label,
       y = "round window size",
       fill = "mean OOS return"
     ) +
@@ -593,7 +594,7 @@ if (!any(is.finite(heatmap_data$mean_forward_oos_return))) {
     geom_tile(
       data = return_highlights$p90_tiles,
       inherit.aes = FALSE,
-      aes(x = round_offset_from_r843, y = roundwindow_size),
+      aes(x = round_offset_from_base_round, y = roundwindow_size),
       fill = NA,
       color = "black",
       linewidth = 0.4
@@ -601,7 +602,7 @@ if (!any(is.finite(heatmap_data$mean_forward_oos_return))) {
     geom_tile(
       data = return_highlights$top_tile,
       inherit.aes = FALSE,
-      aes(x = round_offset_from_r843, y = roundwindow_size),
+      aes(x = round_offset_from_base_round, y = roundwindow_size),
       fill = NA,
       color = "black",
       linewidth = 1.2
@@ -627,7 +628,7 @@ if (!any(is.finite(heatmap_data$forward_oos_maxdrawdown))) {
   maxdd_heatmap_plot <- ggplot(
     heatmap_data,
     aes(
-      x = round_offset_from_r843,
+      x = round_offset_from_base_round,
       y = roundwindow_size,
       fill = forward_oos_maxdrawdown
     )
@@ -635,7 +636,7 @@ if (!any(is.finite(heatmap_data$forward_oos_maxdrawdown))) {
     geom_tile(color = "grey92", linewidth = 0.2) +
     labs(
       title = "Step2 Grid Sweep: Forward OOS Max Drawdown",
-      x = "round offset from r843",
+      x = offset_axis_label,
       y = "round window size",
       fill = "OOS MaxDD"
     ) +
@@ -648,7 +649,7 @@ if (!any(is.finite(heatmap_data$forward_oos_maxdrawdown))) {
     geom_tile(
       data = maxdd_highlights$p90_tiles,
       inherit.aes = FALSE,
-      aes(x = round_offset_from_r843, y = roundwindow_size),
+      aes(x = round_offset_from_base_round, y = roundwindow_size),
       fill = NA,
       color = "black",
       linewidth = 0.4
@@ -656,7 +657,7 @@ if (!any(is.finite(heatmap_data$forward_oos_maxdrawdown))) {
     geom_tile(
       data = maxdd_highlights$top_tile,
       inherit.aes = FALSE,
-      aes(x = round_offset_from_r843, y = roundwindow_size),
+      aes(x = round_offset_from_base_round, y = roundwindow_size),
       fill = NA,
       color = "black",
       linewidth = 1.2
