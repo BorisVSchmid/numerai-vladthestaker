@@ -212,7 +212,7 @@ build_average_portfolio <- function(selected_cells, get_portfolio_fn) {
     cell_key <- as.character(cell_row$cell_key[1])
 
     portfolio <- get_portfolio_fn(
-      offset_value = cell_row$round_offset_from_r843[1],
+      offset_value = cell_row$round_offset_from_base_round[1],
       window_value = cell_row$roundwindow_size[1],
       cell_key = cell_key
     )
@@ -406,7 +406,7 @@ for (file_path in required_files) {
 grid_df <- read.csv(step2_grid_path, stringsAsFactors = FALSE)
 required_grid_cols <- c(
   "base_round",
-  "round_offset_from_r843",
+  "round_offset_from_base_round",
   "roundwindow_size",
   "train_start_round",
   "train_end_round",
@@ -423,7 +423,7 @@ if (length(missing_grid_cols) > 0) {
 
 valid_cells <- grid_df %>%
   dplyr::mutate(
-    round_offset_from_r843 = as.integer(round_offset_from_r843),
+    round_offset_from_base_round = as.integer(round_offset_from_base_round),
     roundwindow_size = as.integer(roundwindow_size),
     train_end_round = as.integer(train_end_round),
     mean_forward_oos_return = as.numeric(mean_forward_oos_return),
@@ -434,7 +434,7 @@ valid_cells <- grid_df %>%
     is.finite(mean_forward_oos_return),
     is.finite(forward_oos_maxdrawdown)
   ) %>%
-  dplyr::mutate(cell_key = make_cell_key(round_offset_from_r843, roundwindow_size)) %>%
+  dplyr::mutate(cell_key = make_cell_key(round_offset_from_base_round, roundwindow_size)) %>%
   dplyr::distinct(cell_key, .keep_all = TRUE)
 
 if (nrow(valid_cells) == 0) {
