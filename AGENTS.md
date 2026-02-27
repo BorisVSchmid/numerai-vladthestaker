@@ -52,7 +52,10 @@ Build staking guidance from historical Numerai model performance data.
   - For `overlap`, evaluation is further restricted to the shared forward window between `return_p90` and `maxdd_p10`.
   - Writes:
     - `output/step3-3xportfolio-weights.csv`
+    - `output/step3-modelcomparison_last_N_oos_rounds.csv`
+    - `output/step3-modelcomparison_all_rounds.csv`
     - `output/step3-forward-oos-cumulative-returns.png`
+  - In modelcomparison outputs, missing rounds are excluded per row/model (no zero-fill imputation), so row-level round counts can differ.
   - Current selected portfolio for staking is `overlap`.
 - `functions-fetch.R`
   - GraphQL/data-fetch helper functions.
@@ -74,6 +77,8 @@ Build staking guidance from historical Numerai model performance data.
   - `output/step2-grid-window-sweep-oos-heatmap.png`
 - Step3 outputs:
   - `output/step3-3xportfolio-weights.csv`
+  - `output/step3-modelcomparison_last_N_oos_rounds.csv`
+  - `output/step3-modelcomparison_all_rounds.csv`
   - `output/step3-forward-oos-cumulative-returns.png`
 
 ## Environment
