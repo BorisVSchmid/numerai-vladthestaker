@@ -71,12 +71,14 @@ Then inspect Step3 portfolio weights and metrics (`output/step3-3xportfolio-weig
 Current `overlap` summary row:
 
 ```text
-n_selected_cells=64        # portfolio parameters, shared between the return and maxdrawdown top 10% portfolios
-n_oos_rounds=60            # 60 OOS validation rounds to compare the models on.
-oos_return=0.006919844     # return per round,
-oos_CVaR=-0.02265425       # CVaR (a description of risk. Lower is better)
+n_selected_cells=64        # number of models that were pooled and averaged, based on overlapping sweep parameters between top 10% return and bottom 10% maxdrawdown portfolios.
+n_oos_rounds=60            # number of rounds on which the overlap model performance stats are based.
+oos_return=0.006919844     # expected average return per round.
+oos_CVaR=-0.02265425       # expected average return on the worst 5% of days.
 oos_maxdd=0.1286154        # Max drawdown (a description of risk. Lower is better).
 ```
+
+Note that because step 3 pools and averages models based on their out-of-sample performance, we no longer have a true out of sample metric. So track the forward performance of your new metamodel!
 
 Current suggested metamodel based on the `overlap` portfolio:
 
