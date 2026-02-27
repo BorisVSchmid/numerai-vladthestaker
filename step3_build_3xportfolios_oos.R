@@ -5,7 +5,7 @@
 #
 # - Reads step2 grid metrics and step1 corr/mmc abs files.
 # - Rebuilds per-cell portfolios for selected return/maxdd cell sets.
-# - Writes 3 averaged portfolios + forward OOS cumulative return chart.
+# - Writes 3 averaged portfolios, model-vs-input comparison metrics, and forward OOS cumulative return chart.
 #
 ########
 
@@ -88,7 +88,8 @@ old_step3_outputs <- c(
   "output/step3-top90-portfolio-weights.csv",
   "output/step3-avg-model-weights-by-threshold.csv",
   "output/step3-avg-return-by-threshold.png",
-  "output/step3-avg-maxdd-by-threshold.png"
+  "output/step3-avg-maxdd-by-threshold.png",
+  "output/step3-modelcomparison.csv"
 )
 
 
@@ -337,6 +338,242 @@ compute_forward_oos_series <- function(daily_data, selected_cells, averaged_weig
   )
 }
 
+compute_oos_stats_on_rounds <- function(daily_data, model_weights, eval_rounds, corr_data = NULL, strict_rounds = FALSE) {
+  if (!all(c("model", "weight") %in% names(model_weights))) {
+    stop("model_weights must contain `model` and `weight` columns.")
+  }
+  if (!"roundNumber" %in% names(daily_data)) {
+    stop("daily_data must contain `roundNumber`.")
+  }
+  if (!is.null(corr_data) && !"roundNumber" %in% names(corr_data)) {
+    stop("corr_data must contain `roundNumber`.")
+  }
+
+  eval_rounds <- as.integer(eval_rounds[is.finite(eval_rounds)])
+  eval_rounds <- sort(unique(eval_rounds))
+  if (length(eval_rounds) == 0) {
+    stop("No evaluation rounds provided for OOS comparison stats.")
+  }
+
+  build_empty_row <- function(n_oos_rounds_value = 0L, n_participated_rounds_value = 0L) {
+    data.frame(
+      n_oos_rounds = as.integer(n_oos_rounds_value),
+      n_participated_rounds = as.integer(n_participated_rounds_value),
+      oos_corr_return = NA_real_,
+      oos_return = NA_real_,
+      oos_CVaR = NA_real_,
+      oos_maxdd = NA_real_,
+      stringsAsFactors = FALSE
+    )
+  }
+
+  model_weights <- model_weights %>%
+    dplyr::transmute(
+      model = as.character(model),
+      weight = as.numeric(weight)
+    ) %>%
+    dplyr::filter(!is.na(model), model != "", is.finite(weight)) %>%
+    dplyr::group_by(model) %>%
+    dplyr::summarise(weight = sum(weight, na.rm = TRUE), .groups = "drop")
+
+  if (nrow(model_weights) == 0) {
+    return(build_empty_row(0L, 0L))
+  }
+
+  weight_sum <- sum(model_weights$weight, na.rm = TRUE)
+  if (!is.finite(weight_sum) || weight_sum <= 0) {
+    return(build_empty_row(0L, 0L))
+  }
+
+  model_weights <- model_weights %>%
+    dplyr::mutate(weight = weight / weight_sum)
+
+  model_names <- as.character(model_weights$model)
+  missing_models <- setdiff(model_names, colnames(daily_data))
+  if (length(missing_models) > 0 && !isTRUE(strict_rounds)) {
+    return(build_empty_row(0L, 0L))
+  }
+
+  corr_effective_panel <- NULL
+
+  if (isTRUE(strict_rounds)) {
+    eval_panel <- data.frame(
+      roundNumber = as.integer(eval_rounds),
+      stringsAsFactors = FALSE
+    ) %>%
+      dplyr::left_join(
+        daily_data %>%
+          dplyr::select(roundNumber, dplyr::any_of(model_names)) %>%
+          dplyr::distinct(roundNumber, .keep_all = TRUE),
+        by = "roundNumber"
+      )
+
+    missing_eval_cols <- setdiff(model_names, colnames(eval_panel))
+    if (length(missing_eval_cols) > 0) {
+      for (model_col in missing_eval_cols) {
+        eval_panel[[model_col]] <- NA_real_
+      }
+    }
+
+    eval_panel <- eval_panel %>%
+      dplyr::arrange(roundNumber) %>%
+      dplyr::select(roundNumber, dplyr::all_of(model_names))
+
+    participation_mask <- stats::complete.cases(eval_panel[, model_names, drop = FALSE])
+    n_participated_rounds <- as.integer(sum(participation_mask, na.rm = TRUE))
+
+    # Strict mode keeps a fixed evaluation round universe by treating
+    # missing submissions as intentional non-submissions (filled as 0.0).
+    eval_panel[, model_names] <- lapply(
+      eval_panel[, model_names, drop = FALSE],
+      function(x) tidyr::replace_na(as.numeric(x), 0)
+    )
+    effective_panel <- eval_panel[, c("roundNumber", model_names), drop = FALSE]
+
+    if (!is.null(corr_data)) {
+      corr_eval_panel <- data.frame(
+        roundNumber = as.integer(eval_rounds),
+        stringsAsFactors = FALSE
+      ) %>%
+        dplyr::left_join(
+          corr_data %>%
+            dplyr::select(roundNumber, dplyr::any_of(model_names)) %>%
+            dplyr::distinct(roundNumber, .keep_all = TRUE),
+          by = "roundNumber"
+        )
+
+      missing_corr_cols <- setdiff(model_names, colnames(corr_eval_panel))
+      if (length(missing_corr_cols) > 0) {
+        for (model_col in missing_corr_cols) {
+          corr_eval_panel[[model_col]] <- NA_real_
+        }
+      }
+
+      corr_eval_panel <- corr_eval_panel %>%
+        dplyr::arrange(roundNumber) %>%
+        dplyr::select(roundNumber, dplyr::all_of(model_names))
+
+      corr_eval_panel[, model_names] <- lapply(
+        corr_eval_panel[, model_names, drop = FALSE],
+        function(x) tidyr::replace_na(as.numeric(x), 0)
+      )
+      corr_effective_panel <- corr_eval_panel[, c("roundNumber", model_names), drop = FALSE]
+    }
+  } else {
+    eval_panel <- daily_data %>%
+      dplyr::filter(roundNumber %in% eval_rounds) %>%
+      dplyr::arrange(roundNumber) %>%
+      dplyr::select(roundNumber, dplyr::all_of(model_names))
+
+    complete_mask <- stats::complete.cases(eval_panel[, model_names, drop = FALSE])
+    effective_panel <- eval_panel[complete_mask, c("roundNumber", model_names), drop = FALSE]
+
+    if (!is.null(corr_data)) {
+      corr_eval_panel <- corr_data %>%
+        dplyr::filter(roundNumber %in% eval_rounds) %>%
+        dplyr::arrange(roundNumber) %>%
+        dplyr::select(roundNumber, dplyr::all_of(model_names))
+      corr_effective_panel <- corr_eval_panel[complete_mask, c("roundNumber", model_names), drop = FALSE]
+    }
+  }
+
+  if (nrow(effective_panel) == 0) {
+    return(build_empty_row(0L, 0L))
+  }
+
+  round_returns <- as.numeric(
+    as.matrix(effective_panel[, model_names, drop = FALSE]) %*%
+      matrix(model_weights$weight, ncol = 1)
+  )
+
+  oos_corr_return <- NA_real_
+  if (!is.null(corr_effective_panel) && nrow(corr_effective_panel) == nrow(effective_panel)) {
+    corr_round_returns <- as.numeric(
+      as.matrix(corr_effective_panel[, model_names, drop = FALSE]) %*%
+        matrix(model_weights$weight, ncol = 1)
+    )
+    oos_corr_return <- as.numeric(mean(corr_round_returns, na.rm = TRUE))
+  }
+
+  oos_return <- as.numeric(mean(round_returns, na.rm = TRUE))
+  oos_CVaR <- tryCatch(
+    suppressWarnings(as.numeric(PerformanceAnalytics::CVaR(round_returns, method = "historical"))),
+    error = function(e) NA_real_
+  )
+  oos_maxdd <- tryCatch(
+    suppressWarnings(as.numeric(PerformanceAnalytics::maxDrawdown(round_returns))),
+    error = function(e) NA_real_
+  )
+
+  data.frame(
+    n_oos_rounds = as.integer(nrow(effective_panel)),
+    n_participated_rounds = if (isTRUE(strict_rounds)) n_participated_rounds else as.integer(nrow(effective_panel)),
+    oos_corr_return = oos_corr_return,
+    oos_return = oos_return,
+    oos_CVaR = oos_CVaR,
+    oos_maxdd = oos_maxdd,
+    stringsAsFactors = FALSE
+  )
+}
+
+compute_pareto_frontier_flags <- function(df) {
+  if (!all(c("oos_return", "oos_CVaR", "oos_maxdd") %in% names(df))) {
+    stop("Pareto frontier requires columns: oos_return, oos_CVaR, oos_maxdd.")
+  }
+
+  n_rows <- nrow(df)
+  if (n_rows == 0) {
+    return(integer(0))
+  }
+
+  valid_mask <- is.finite(df$oos_return) & is.finite(df$oos_CVaR) & is.finite(df$oos_maxdd)
+  frontier_flags <- integer(n_rows)
+
+  valid_idx <- which(valid_mask)
+  if (length(valid_idx) == 0) {
+    return(frontier_flags)
+  }
+
+  dominated <- rep(FALSE, length(valid_idx))
+
+  for (i in seq_along(valid_idx)) {
+    if (dominated[i]) {
+      next
+    }
+
+    b_idx <- valid_idx[i]
+    b_ret <- as.numeric(df$oos_return[b_idx])
+    b_cvar <- as.numeric(df$oos_CVaR[b_idx])
+    b_maxdd <- as.numeric(df$oos_maxdd[b_idx])
+
+    for (j in seq_along(valid_idx)) {
+      if (i == j) {
+        next
+      }
+
+      a_idx <- valid_idx[j]
+      a_ret <- as.numeric(df$oos_return[a_idx])
+      a_cvar <- as.numeric(df$oos_CVaR[a_idx])
+      a_maxdd <- as.numeric(df$oos_maxdd[a_idx])
+
+      dominates <- (
+        a_ret >= b_ret &&
+          a_cvar >= b_cvar &&
+          a_maxdd <= b_maxdd &&
+          (a_ret > b_ret || a_cvar > b_cvar || a_maxdd < b_maxdd)
+      )
+
+      if (dominates) {
+        dominated[i] <- TRUE
+        break
+      }
+    }
+  }
+
+  frontier_flags[valid_idx] <- ifelse(dominated, 0L, 1L)
+  frontier_flags
+}
+
 rebase_cumulative_by_entry_points <- function(returns_df) {
   if (nrow(returns_df) == 0) {
     return(returns_df)
@@ -492,9 +729,28 @@ if (nrow(daily_data) == 0) {
   stop("No rows remain after applying base_round=", base_round, ".")
 }
 
+corr_daily_data <- corr_abs %>%
+  dplyr::filter(roundNumber >= base_round) %>%
+  dplyr::arrange(roundNumber) %>%
+  data.frame()
+
+if (nrow(corr_daily_data) == 0) {
+  stop("No corr rows remain after applying base_round=", base_round, ".")
+}
+
 candidate_models <- setdiff(setdiff(names(daily_data), "roundNumber"), model_names_to_exclude)
 if (length(candidate_models) == 0) {
   stop("No candidate models after exclusions.")
+}
+
+models_sheet <- readxl::read_excel("Optimize-Me.xlsx", sheet = "Models", col_types = "text")
+if (ncol(models_sheet) < 1) {
+  stop("Models sheet must contain at least one column with model names.")
+}
+input_model_names <- unique(trimws(as.character(models_sheet[[1]])))
+input_model_names <- input_model_names[!is.na(input_model_names) & input_model_names != ""]
+if (length(input_model_names) == 0) {
+  stop("No non-empty model names found in Models sheet.")
 }
 
 source("functions-portfolio.R")
@@ -547,6 +803,7 @@ if (nrow(overlap_cells) > 0) {
 ## Rebuild cell portfolios and aggregate by group
 #
 portfolio_cache <- new.env(parent = emptyenv())
+averaged_portfolios <- list()
 
 get_cell_portfolio <- function(offset_value, window_value, cell_key) {
   if (exists(cell_key, envir = portfolio_cache, inherits = FALSE)) {
@@ -576,6 +833,7 @@ for (portfolio_type in names(cell_groups)) {
     selected_cells = selected_cells,
     get_portfolio_fn = get_cell_portfolio
   )
+  averaged_portfolios[[portfolio_type]] <- averaged_weights
 
   series_df <- compute_forward_oos_series(
     daily_data = daily_data,
@@ -643,10 +901,118 @@ if (nrow(bad_weight_groups) > 0) {
   )
 }
 
+# Use the exact effective Step3 portfolio OOS rounds for model-vs-portfolio comparison.
+# Prefer the overlap portfolio rounds (shared comparison context). If overlap is unavailable,
+# use the intersection across available Step3 portfolios; if that is empty, fall back to the
+# union so Step3 can still produce outputs under disjoint valid OOS round sets.
+if ("overlap" %in% names(returns_rows)) {
+  comparison_eval_rounds <- as.integer(returns_rows$overlap$roundNumber)
+} else {
+  available_round_sets <- lapply(returns_rows, function(df) as.integer(df$roundNumber))
+  comparison_eval_rounds <- Reduce(intersect, available_round_sets)
+  if (length(comparison_eval_rounds) == 0) {
+    comparison_eval_rounds <- sort(unique(unlist(available_round_sets, use.names = FALSE)))
+  }
+}
+comparison_eval_rounds <- sort(unique(as.integer(comparison_eval_rounds)))
+if (length(comparison_eval_rounds) == 0) {
+  stop("No rounds available for model comparison output.")
+}
+
+all_eval_rounds <- sort(unique(as.integer(daily_data$roundNumber)))
+if (length(all_eval_rounds) == 0) {
+  stop("No rounds available for all-round model comparison output.")
+}
+
+portfolio_comparison_order <- c("return_p90", "maxdd_p10", "overlap")
+portfolio_label_map <- c(
+  return_p90 = "return_p90",
+  maxdd_p10 = "maxdd_p10",
+  overlap = "overlap"
+)
+build_model_comparison_df <- function(eval_rounds) {
+  eval_rounds <- sort(unique(as.integer(eval_rounds[is.finite(eval_rounds)])))
+  if (length(eval_rounds) == 0) {
+    stop("No rounds available for model comparison output.")
+  }
+
+  portfolio_comparison_rows <- lapply(
+    portfolio_comparison_order[portfolio_comparison_order %in% names(averaged_portfolios)],
+    function(portfolio_type) {
+      stats_df <- compute_oos_stats_on_rounds(
+        daily_data = daily_data,
+        model_weights = averaged_portfolios[[portfolio_type]],
+        eval_rounds = eval_rounds,
+        corr_data = corr_daily_data
+      )
+
+      data.frame(
+        model = as.character(portfolio_label_map[[portfolio_type]]),
+        n_oos_rounds = as.integer(stats_df$n_oos_rounds[1]),
+        n_participated_rounds = as.integer(stats_df$n_participated_rounds[1]),
+        oos_corr_return = as.numeric(stats_df$oos_corr_return[1]),
+        oos_return = as.numeric(stats_df$oos_return[1]),
+        oos_CVaR = as.numeric(stats_df$oos_CVaR[1]),
+        oos_maxdd = as.numeric(stats_df$oos_maxdd[1]),
+        stringsAsFactors = FALSE
+      )
+    }
+  )
+
+  input_model_rows <- lapply(input_model_names, function(model_name) {
+    stats_df <- compute_oos_stats_on_rounds(
+      daily_data = daily_data,
+      model_weights = data.frame(model = model_name, weight = 1, stringsAsFactors = FALSE),
+      eval_rounds = eval_rounds,
+      corr_data = corr_daily_data
+    )
+
+    data.frame(
+      model = as.character(model_name),
+      n_oos_rounds = as.integer(stats_df$n_oos_rounds[1]),
+      n_participated_rounds = as.integer(stats_df$n_participated_rounds[1]),
+      oos_corr_return = as.numeric(stats_df$oos_corr_return[1]),
+      oos_return = as.numeric(stats_df$oos_return[1]),
+      oos_CVaR = as.numeric(stats_df$oos_CVaR[1]),
+      oos_maxdd = as.numeric(stats_df$oos_maxdd[1]),
+      stringsAsFactors = FALSE
+    )
+  })
+
+  model_comparison_df <- dplyr::bind_rows(c(portfolio_comparison_rows, input_model_rows))
+  model_comparison_df %>%
+    dplyr::mutate(pareto_3d_frontier = as.integer(compute_pareto_frontier_flags(model_comparison_df)))
+}
+
+comparison_n_rounds <- as.integer(length(comparison_eval_rounds))
+model_comparison_dir <- dirname(weights_out)
+model_comparison_last_n_out <- file.path(
+  model_comparison_dir,
+  paste0("step3-modelcomparison_last_", comparison_n_rounds, "_oos_rounds.csv")
+)
+model_comparison_all_rounds_out <- file.path(model_comparison_dir, "step3-modelcomparison_all_rounds.csv")
+
+model_comparison_last_n_df <- build_model_comparison_df(comparison_eval_rounds)
+model_comparison_all_rounds_df <- build_model_comparison_df(all_eval_rounds) %>%
+  dplyr::rename(
+    n_rounds = n_oos_rounds,
+    corr_return = oos_corr_return,
+    return = oos_return,
+    CVaR = oos_CVaR,
+    maxdd = oos_maxdd
+  )
+
 
 ## Write outputs
 #
+stale_last_n_outputs <- Sys.glob(file.path(model_comparison_dir, "step3-modelcomparison_last_*_oos_rounds.csv"))
+if (length(stale_last_n_outputs) > 0) {
+  invisible(file.remove(stale_last_n_outputs))
+}
+
 write.csv(weights_df, weights_out, row.names = FALSE)
+write.csv(model_comparison_last_n_df, model_comparison_last_n_out, row.names = FALSE)
+write.csv(model_comparison_all_rounds_df, model_comparison_all_rounds_out, row.names = FALSE)
 
 returns_plot <- ggplot(
   returns_df_rebased,
@@ -690,6 +1056,8 @@ if (nrow(overlap_cells) == 0) {
 }
 cat("Wrote:\n")
 cat(" -", weights_out, "\n")
+cat(" -", model_comparison_last_n_out, "\n")
+cat(" -", model_comparison_all_rounds_out, "\n")
 cat(" -", returns_plot_out, "\n")
 
 # Ensure no default-device PDF artifact is left behind.
