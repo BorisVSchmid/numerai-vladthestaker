@@ -196,6 +196,8 @@ an outer chronological test.
 
 ## Read the Step 3 figure
 
+<img width="2600" height="2702" alt="step3_inclusion-posteriors" src="https://github.com/user-attachments/assets/66eb93ff-2ed6-4164-a247-29af8f70923d" />
+
 **Inclusion posteriors:** the top panel shows the posterior expected historical
 mean D60 score of EW(pos), with its middle-90% interval. The next panel shows
 EW(pos) minus EW(all), with the axis capped at −0.05 to +0.05. Positive values
