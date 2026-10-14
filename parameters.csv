@@ -1,0 +1,18 @@
+Section,Parameter,Value,Rerun from step,Notes
+Tournament,tournament_id,8,Step 1 onward,Numerai tournament identifier.
+Pipeline baseline,base_round,843,Step 1 onward,First daily-tournament round retained in fetched and downstream data.
+Scoring profile,corr_metric_name,canon_corr60,Step 1 onward,Exact Numerai API displayName for finalized Ender60 CORR.
+Scoring profile,corr_metric_version,0,Step 1 onward,Exact Numerai API version for Ender60 CORR.
+Scoring profile,mmc_metric_name,canon_mmc60,Step 1 onward,Exact Numerai API displayName for finalized Ender60 MMC.
+Scoring profile,mmc_metric_version,0,Step 1 onward,Exact Numerai API version for Ender60 MMC.
+Scoring profile,selection_score_day,60,Step 1 onward,Final maturity in the D60+|W9 signal; intermediate-score downloads remain enabled.
+Scoring profile,historical_window,9,Step 1 onward,Number of exact D60 score cells averaged per model.
+Scoring profile,final_score_day,60,Step 1 onward,Exact finalized maturity used for historical outcomes.
+Scoring profile,score_availability_buffer_rounds,4,Step 1 onward,Not a safety margin: a round's D60 score only appears 63-64 rounds after that round (60 trading days plus the days before scoring starts at five rounds a week) so t-64 is the newest cell that is always available. The runtime requires 4; there is no fallback.
+Scoring weights,corr_multiplier,3,Step 1 onward,Ender60 CORR multiplier for each maturity cell.
+Scoring weights,mmc_multiplier,15,Step 1 onward,Ender60 MMC multiplier for each maturity cell.
+Download horizon,initial_history_rounds,500,Step 1 onward,Minimum API round lookback for a new model; Step1 expands this to the full base-round history.
+Download horizon,daily_refresh_rounds,75,Step 1 onward,Overlapping API lookback covering all nine exact source rounds through t-72.
+API pacing,request_pause_seconds,0.15,Step 1 onward,Pause between public model-score requests.
+Portfolio eligibility,min_models_per_cell,0,Step 3 onward,Zero floor: any positive model forms a portfolio; none means no submission and a zero replay score.
+Portfolio eligibility,model_names_to_exclude,numerai_swmm,Step 1 onward,Reviewed model exclusions.
